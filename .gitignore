@@ -1,0 +1,8 @@
+*.sh
+*.sc
+spi_acpi_device.py
+bump*
+#build
+.build
+.vscode
+Makefile
