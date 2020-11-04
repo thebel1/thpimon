@@ -1,0 +1,55 @@
+<bulletin>
+
+	
+
+	<id>thpimon_1.0-0.00001</id>
+
+	
+
+	<vendor>Tom Hebel</vendor>
+
+	
+
+	<summary>thpimon: Native RPi hardware monitoring driver</summary>
+
+        
+	<severity>general</severity>
+
+        
+        <category>enhancement</category>
+
+        
+        <urgency>important</urgency>
+
+        
+	<releaseType>extension</releaseType>
+
+	
+
+	<description>Native RPi hardware monitoring driver module for vmkernel</description>
+
+	
+
+	<kbUrl />
+
+	
+
+	<contact />
+
+        
+        <componentNameSpec name="thpimon" uiString="Native RPi hardware monitoring driver for vmkernel" />
+
+        
+        <componentVersionSpec uiString="0.1.0" version="1.0-0.00001" />
+
+	<releaseDate>2020-11-04T23:29:13+00:00</releaseDate>
+
+	
+
+	<platforms>
+		<softwarePlatform locale="" productLineID="embeddedEsx" version="7.0.1" />
+	</platforms>
+
+	
+
+	<vibList><vibID>THX_bootbank_thpimon_0.1.0-1OEM.701.1.0.40650718</vibID></vibList></bulletin>
