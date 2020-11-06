@@ -21,6 +21,11 @@
  * SOFTWARE.
 \******************************************************************************/
 
+// TODO:
+// - Implement a fail-safe for when the requested DMA heap is above 1GB, and
+//   program the DMA controller to move the DMA aperture upwards to match the
+//   heap start MA.
+
 /*
  * pimon_os.c --
  * 
@@ -331,7 +336,11 @@ pimon_attachDevice(vmk_Device device)
    heapProps.creationTimeoutMS = VMK_TIMEOUT_NONBLOCKING;
    heapProps.typeSpecific.custom.physContiguity = VMK_MEM_PHYS_CONTIGUOUS;
    
-   // TODO: check if using 4GB is sufficient
+   /*
+    * The DMA addresses accessible by the DMA engine are below 1GB by default,
+    * so the below may not be sufficient.
+    */
+   // TODO: Make more robust by programming DMA controller to move aperture.
    heapProps.typeSpecific.custom.physRange = VMK_PHYS_ADDR_BELOW_2GB;
 
    status = vmk_NameInitialize(&heapProps.name, RPIQ_DMA_HEAP_NAME);
