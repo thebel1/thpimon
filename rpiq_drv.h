@@ -47,8 +47,7 @@
 #define RPIQ_DMA_MBOX_OBJ_MAX       256
 
 #define RPIQ_MBOX_CHAN_MASK         15
-#define RPIQ_MBOX_FULL_ATTEMPTS     0x1000
-#define RPIQ_MBOX_READ_ATTEMPTS     0x1000
+#define RPIQ_MBOX_MAX_RETRIES       0x1000
 
 /***********************************************************************/
 
@@ -56,13 +55,13 @@
  * Offsets from RPIQ MMIO base
  */
 #define RPIQ_MBOX_READ              0x0
-#define RPIQ_MBOX_READ_STATUS       0x18
+#define RPIQ_MBOX_STATUS            0x18
 #define RPIQ_MBOX_WRITE             0x20
-#define RPIQ_MBOX_WRITE_STATUS      0x38
 
 #define RPIQ_PROCESS_REQ            0x0
 #define RPIQ_MBOX_FULL              (1 << 31)
 #define RPIQ_MBOX_EMPTY             (1 << 30)
+#define RPIQ_MBOX_SUCCESS           0x80000000
 
 /*
  * Mbox tags
