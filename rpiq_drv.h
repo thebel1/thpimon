@@ -37,7 +37,7 @@
 
 /***********************************************************************/
 
-#define RPIQ_DMA_HEAP_NAME "rpiqDmaHeap"
+#define RPIQ_DMA_HEAP_NAME          "rpiqDmaHeap"
 
 #define RPIQ_DMA_COHERENT_ADDR      0xC0000000
 #define RPIQ_DMA_MAX_ADDR           ((vmk_VA)1<<32)
@@ -47,7 +47,7 @@
 #define RPIQ_DMA_MBOX_OBJ_MAX       256
 
 #define RPIQ_MBOX_CHAN_MASK         15
-#define RPIQ_MBOX_MAX_RETRIES       0x1000
+#define RPIQ_MBOX_MAX_RETRIES       0x2000
 
 /***********************************************************************/
 
@@ -68,49 +68,49 @@
  */
 
 /* Firmware */
-#define RPIQ_MBOX_TAG_FWREV          0x00000001
+#define RPIQ_MBOX_TAG_FWREV         0x00000001
 
 /* Hardware */
-#define RPIQ_MBOX_TAG_BOARDMODEL     0x00010001
-#define RPIQ_MBOX_TAG_BOARDREV       0x00010002
-#define RPIQ_MBOX_TAG_BOARDMAC       0x00010003
-#define RPIQ_MBOX_TAG_BOARDSERIAL    0x00010004
-#define RPIQ_MBOX_TAG_ARMMEM         0x00010005
-#define RPIQ_MBOX_TAG_VCMEM          0x00010006
-#define RPIQ_MBOX_TAG_CLKS           0x00010007
+#define RPIQ_MBOX_TAG_BOARDMODEL    0x00010001
+#define RPIQ_MBOX_TAG_BOARDREV      0x00010002
+#define RPIQ_MBOX_TAG_BOARDMAC      0x00010003
+#define RPIQ_MBOX_TAG_BOARDSERIAL   0x00010004
+#define RPIQ_MBOX_TAG_ARMMEM        0x00010005
+#define RPIQ_MBOX_TAG_VCMEM         0x00010006
+#define RPIQ_MBOX_TAG_CLKS          0x00010007
 
 /* Config */
-#define RPIQ_MBOX_TAG_CMDLINE        0x00050001
+#define RPIQ_MBOX_TAG_CMDLINE       0x00050001
 
 /* Shared resources */
-#define RPIQ_MBOX_TAG_DMACHAN        0x00060001
+#define RPIQ_MBOX_TAG_DMACHAN       0x00060001
 
 /* Power */
-#define RPIQ_MBOX_TAG_GETPWR         0x00020001
-#define RPIQ_MBOX_TAG_TIMING         0x00020002
-#define RPIQ_MBOX_TAG_SETPWR         0x00028001
+#define RPIQ_MBOX_TAG_GETPWR        0x00020001
+#define RPIQ_MBOX_TAG_TIMING        0x00020002
+#define RPIQ_MBOX_TAG_SETPWR        0x00028001
 
 /* Clocks */
-#define RPIQ_MBOX_TAG_GETCLK_STATE   0x00030001
-#define RPIQ_MBOX_TAG_SETCLK_STATE   0x00038001
-#define RPIQ_MBOX_TAG_GETCLK_RATE    0x00030002
-#define RPIQ_MBOX_TAG_SETCLK_RATE    0x00038002
-#define RPIQ_MBOX_TAG_GETCLK_MAX     0x00030004
-#define RPIQ_MBOX_TAG_GETCLK_MIN     0x00038007
-#define RPIQ_MBOX_TAG_GETCLK_TURBO   0x00030009
-#define RPIQ_MBOX_TAG_SETCLK_TURBO   0x00038009
+#define RPIQ_MBOX_TAG_GETCLK_STATE  0x00030001
+#define RPIQ_MBOX_TAG_SETCLK_STATE  0x00038001
+#define RPIQ_MBOX_TAG_GETCLK_RATE   0x00030002
+#define RPIQ_MBOX_TAG_SETCLK_RATE   0x00038002
+#define RPIQ_MBOX_TAG_GETCLK_MAX    0x00030004
+#define RPIQ_MBOX_TAG_GETCLK_MIN    0x00038007
+#define RPIQ_MBOX_TAG_GETCLK_TURBO  0x00030009
+#define RPIQ_MBOX_TAG_SETCLK_TURBO  0x00038009
 
 // TODO: the resto fot he mbox tags...
 
-#define RPIQ_MBOX_TAG_GET_TEMP       0x00030006
+#define RPIQ_MBOX_TAG_GET_TEMP      0x00030006
 
-#define RPIQ_INVALID_RESPONSE (~((vmk_uint32)0))
+#define RPIQ_INVALID_RESPONSE       (~((vmk_uint32)0))
 
 /***********************************************************************/
 
-#define RPIQ_DMA_LOCK_NAME "dmaBufLock"
+#define RPIQ_DMA_LOCK_NAME          "dmaBufLock"
 
-#define RPIQ_DMA_MEM_BARRIER() asm volatile ("dsb sy" ::: "memory")
+#define RPIQ_DMA_MEM_BARRIER()      asm volatile ("dsb sy" ::: "memory")
 
 /*
  * Should be sufficient as per p. 33 in:

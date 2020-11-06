@@ -224,13 +224,11 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
               rpiq_MboxBuffer_t *buffer)    // IN/OUT
 {
    VMK_ReturnStatus status = VMK_OK;
-   vmk_uint32 mboxStatus = RPIQ_MBOX_FULL;
    rpiq_MboxDMABuffer_t *dmaBuf = &rpiq_MboxDMABuffer;
    rpiq_MboxBuffer_t *dmaBufPtr = dmaBuf->ptr;
    vmk_MA dmaBufPtrMA;
    vmk_uint32 mboxIn;
    vmk_uint32 mboxOut;
-   vmk_uint32 mboxFullRetries = 0;
    vmk_uint32 mboxReadRetries = 0;
 
    /*
@@ -283,9 +281,9 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    RPIQ_DMA_MEM_BARRIER();
 
    /*
-    * Invalidate, but do not evict dirty cache lines.
+    * This needs to be here.
     */
-   RPIQ_DMA_CLEAN_DCACHE((void *)dmaBufPtr);
+   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
 
    /*
     *-------------------------------------------------------------------
@@ -296,23 +294,12 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    /*
     * Wait for mbox to fill up
     */
-   mboxFullRetries = 0;
-   do {
-      vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
-                               RPIQ_MBOX_STATUS,
-                               &mboxStatus);
-
-      RPIQ_DMA_MEM_BARRIER();
-
-      ++mboxFullRetries;
-      if (mboxFullRetries >= RPIQ_MBOX_MAX_RETRIES) {
-         status = VMK_BUSY;
-         vmk_Warning(pimon_Driver->logger,
-                     "RPIQ mailbox not full after %d retries",
-                     mboxFullRetries);
-         goto mbox_full_attempts;
-      }
-   } while (mboxStatus & RPIQ_MBOX_EMPTY);
+   if (rpiq_mboxStatusCleared(RPIQ_MBOX_EMPTY) != VMK_OK) {
+      status = VMK_TIMEOUT;
+      vmk_Warning(pimon_Driver->logger,
+                  "timeout waiting for mbox to become full");
+      goto mbox_full_timeout;
+   }
 
    RPIQ_DMA_MEM_BARRIER();
 
@@ -328,7 +315,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
 
       ++mboxReadRetries;
       if (mboxReadRetries >= RPIQ_MBOX_MAX_RETRIES) {
-         status = VMK_BUSY;
+         status = VMK_TIMEOUT;
          vmk_Warning(pimon_Driver->logger,
                      "RPIQ mailbox read failed after %d retries",
                      mboxReadRetries);
@@ -369,7 +356,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
 
 mbox_response_mismatch:
 mbox_read_attempts:
-mbox_full_attempts:
+mbox_full_timeout:
 mbox_empty_timeout:
 mbox_drain_timeout:
    vmk_SpinlockUnlock(dmaBuf->lock);
