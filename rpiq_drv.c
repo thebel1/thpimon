@@ -208,41 +208,6 @@ rpiq_mboxStatusCleared(vmk_uint32 status)
 
 /*
  ***********************************************************************
- * rpiq_mboxReadChannel --
- * 
- *    Read from a VC mbox channel.
- * 
- * Results:
- *    VMK_OK      on success
- *    VMK_TIMEOUT otherwise
- * 
- * Side Effects:
- *    None.
- ***********************************************************************
- */
-VMK_ReturnStatus
-rpiq_mboxReadChannel(vmk_uint8 channel,
-                     vmk_uint32 *mboxOut)
-{
-   int retries = 0;
-   vmk_uint32 mboxVal;
-
-   do {
-      vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
-                               RPIQ_MBOX_READ,
-                               &mboxVal);
-      if ((mboxVal & RPIQ_MBOX_CHAN_MASK) == channel) {
-         *mboxOut = mboxVal;
-         return VMK_OK;
-      }
-      RPIQ_DMA_MEM_BARRIER();
-   } while (retries++ < RPIQ_MBOX_MAX_RETRIES);
-
-   return VMK_TIMEOUT;
-}
-
-/*
- ***********************************************************************
  * rpiq_mboxSend --
  * 
  *    Send a request to a VideoCore mailbox and receive its response.
@@ -269,12 +234,6 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    vmk_uint32 mboxReadRetries = 0;
 
    /*
-    *-------------------------------------------------------------------
-    * MBOX WRITE
-    *-------------------------------------------------------------------
-    */
-
-   /*
     * Drain mbox
     */
    if (rpiq_mboxDrain() != VMK_OK) {
@@ -285,6 +244,12 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
 
    /* Lock the DMA buffer */
    vmk_SpinlockLock(dmaBuf->lock);
+
+   /*
+    *-------------------------------------------------------------------
+    * MBOX WRITE
+    *-------------------------------------------------------------------
+    */
 
    /*
     * Wait for mbox to become empty
@@ -309,28 +274,11 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
              | RPIQ_DMA_COHERENT_ADDR
              | (vmk_uint32)channel);
 
-#ifdef RPIQ_DEBUG
-   {
-      vmk_Log(pimon_Driver->logger,
-              "writing mboxOut %p to DMA buffer %p (MA %p) on channel %d",
-              mboxIn,
-              dmaBufPtr,
-              dmaBufPtrMA,
-              channel);
-   }
-#endif /* RPIQ_DEBUG */
-
    RPIQ_DMA_MEM_BARRIER();
 
-   status = vmk_MappedResourceWrite32(&rpiq_Device->mmioMappedAddr,
-                                      RPIQ_MBOX_WRITE,
-                                      mboxIn);
-   if (status != VMK_OK) {
-      vmk_Warning(pimon_Driver->logger,
-                  "failed to write to RPIQ mailbox: %s",
-                  vmk_StatusToString(status));
-      goto mbox_write_failed;
-   }
+   vmk_MappedResourceWrite32(&rpiq_Device->mmioMappedAddr,
+                             RPIQ_MBOX_WRITE,
+                             mboxIn);
 
    RPIQ_DMA_MEM_BARRIER();
 
@@ -350,15 +298,11 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
     */
    mboxFullRetries = 0;
    do {
-      status = vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
-                                       RPIQ_MBOX_STATUS,
-                                       &mboxStatus);
-      if (status != VMK_OK) {
-         vmk_Warning(pimon_Driver->logger,
-                     "failed to read RPIQ mailbox status: %s",
-                     vmk_StatusToString(status));
-         goto mbox_read_status_failed;
-      }
+      vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
+                               RPIQ_MBOX_STATUS,
+                               &mboxStatus);
+
+      RPIQ_DMA_MEM_BARRIER();
 
       ++mboxFullRetries;
       if (mboxFullRetries >= RPIQ_MBOX_MAX_RETRIES) {
@@ -366,34 +310,21 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
          vmk_Warning(pimon_Driver->logger,
                      "RPIQ mailbox not full after %d retries",
                      mboxFullRetries);
-         //goto mbox_full_attempts;
-         break;
+         goto mbox_full_attempts;
       }
    } while (mboxStatus & RPIQ_MBOX_EMPTY);
 
-#ifdef RPIQ_DEBUG
-      {
-         vmk_Log(pimon_Driver->logger,
-                 "RPIQ mailbox full after %d retries, attempting read",
-                 mboxFullRetries);
-      }
-#endif /* RPIQ_DEBUG */
+   RPIQ_DMA_MEM_BARRIER();
 
    /*
     * Perform read
     */
-   RPIQ_DMA_MEM_BARRIER();
    do {
-      status = vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
-                                        RPIQ_MBOX_READ,
-                                        &mboxOut);
+      vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
+                               RPIQ_MBOX_READ,
+                               &mboxOut);
+      
       RPIQ_DMA_MEM_BARRIER();
-      if (status != VMK_OK) {
-         vmk_Warning(pimon_Driver->logger,
-                     "failed to read from RPIQ mailbox: %s",
-                     vmk_StatusToString(status));
-         goto mbox_read_failed;
-      }
 
       ++mboxReadRetries;
       if (mboxReadRetries >= RPIQ_MBOX_MAX_RETRIES) {
@@ -404,16 +335,12 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
          goto mbox_read_attempts;
       }
    } while ((mboxOut & RPIQ_MBOX_CHAN_MASK) != channel);
+
    RPIQ_DMA_MEM_BARRIER();
 
-#ifdef RPIQ_DEBUG
-   {
-      vmk_Log(pimon_Driver->logger,
-              "Read value %p from RPIQ mailbox",
-              mboxOut);
-   }
-#endif /* RPIQ_DBUG */
-
+   /*
+    * Something went wrong, in & out buffers don't match
+    */
    if (mboxOut != mboxIn) {
       status = VMK_FAILURE;
       vmk_Warning(pimon_Driver->logger,
@@ -426,26 +353,23 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    /*
     * Flush cache and copy data back to in/out buffer
     */
+
    RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
-   if (dmaBufPtr->header.requestResponse == RPIQ_PROCESS_REQ) {
+   vmk_Memcpy(buffer, dmaBufPtr, sizeof(*buffer));
+   if (buffer->header.requestResponse != RPIQ_MBOX_SUCCESS) {
       status = VMK_FAILURE;
       vmk_Warning(pimon_Driver->logger,
                   "no response data received");
-      goto mbox_no_response;
    }
-   vmk_Memcpy(buffer, dmaBufPtr, sizeof(*buffer));
 
    /* Unlock the DMA buffer */
    vmk_SpinlockUnlock(dmaBuf->lock);
 
    return VMK_OK;
 
-mbox_no_response:
 mbox_response_mismatch:
 mbox_read_attempts:
-mbox_read_failed:
-mbox_read_status_failed:
-mbox_write_failed:
+mbox_full_attempts:
 mbox_empty_timeout:
 mbox_drain_timeout:
    vmk_SpinlockUnlock(dmaBuf->lock);
