@@ -520,11 +520,15 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
       goto ioctl_vmk2uw_failed;
    }
 
+   vmk_HeapFree(pimon_heapID, ioctlData);
+
    return VMK_OK;
 
 ioctl_vmk2uw_failed:
 ioctl_cmd_failed:
 ioctl_uw2vmk_failed:
+   vmk_HeapFree(pimon_heapID, ioctlData);
+
 ioctl_alloc_failed:
 file_data_null:
    return status;
