@@ -28,7 +28,6 @@ import fcntl
 #########################################################################
 
 PIMON_DEVICE_PATH = '/dev/vmgfx33'
-PIMON_RPI_BYTE_ORDER = 'little'
 
 #########################################################################
 
@@ -45,14 +44,20 @@ RPIQ_CHAN_MBOX_PROP_ARM2VC  = 8
 # RPIQ tags
 #
 
+RPIQ_MBOX_TAG_FWREV         = 0x00000001
+RPIQ_MBOX_FWREV_LEN         = 0x4
+
 RPIQ_MBOX_TAG_BOARDMODEL    = 0x00010001
 RPIQ_MBOX_BOARDMODEL_LEN    = 0x4
 
 RPIQ_MBOX_TAG_BOARDREV      = 0x00010002
 RPIQ_MBOX_BOARDREV_LEN      = 0x4
 
-RPIQ_MBOX_TAG_HWMAC         = 0x00010003
-RPIQ_MBOX_HWMAC_LEN         = 0x6
+RPIQ_MBOX_TAG_BOARDMAC      = 0x00010003
+RPIQ_MBOX_BOARDMAC_LEN      = 0x6
+
+RPIQ_MBOX_TAG_BOARDSERIAL   = 0x00010004
+RPIQ_MBOX_BOARDSERIAL_LEN   = 0x8
 
 RPIQ_MBOX_TAG_GET_TEMP      = 0x00030006
 RPIQ_MBOX_GET_TEMP_LEN      = 0x8
@@ -71,6 +76,48 @@ class PiMon:
         self.pimonDev.close()
 
     #########################################################################
+    # getFWFev --
+    #
+    #########################################################################
+    def getFWRev(self):
+        try:
+            ioctlData = bytearray(struct.pack('<IIIIIIII',
+                                              RPIQ_BUFFER_LEN,
+                                              RPIQ_PROCESS_REQ,
+                                              RPIQ_MBOX_TAG_FWREV,
+                                              RPIQ_MBOX_FWREV_LEN,
+                                              0, 0, 0, 0))
+            fcntl.ioctl(self.pimonDev,
+                        RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                        ioctlData, 1)
+            out = int(struct.unpack('<IIIIIIII', ioctlData)[5])
+        except Exception as e:
+            print(e)
+            return 0
+        return out
+
+    #########################################################################
+    # getBoardModel --
+    #
+    #########################################################################
+    def getBoardModel(self):
+        try:
+            ioctlData = bytearray(struct.pack('<IIIIIIII',
+                                              RPIQ_BUFFER_LEN,
+                                              RPIQ_PROCESS_REQ,
+                                              RPIQ_MBOX_TAG_BOARDMODEL,
+                                              RPIQ_MBOX_BOARDMODEL_LEN,
+                                              0, 0, 0, 0))
+            fcntl.ioctl(self.pimonDev,
+                        RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                        ioctlData, 1)
+            out = int(struct.unpack('<IIIIIIII', ioctlData)[5])
+        except Exception as e:
+            print(e)
+            return 0
+        return out
+
+    #########################################################################
     # getBoardRev --
     #
     #########################################################################
@@ -85,10 +132,56 @@ class PiMon:
             fcntl.ioctl(self.pimonDev,
                         RPIQ_CHAN_MBOX_PROP_ARM2VC,
                         ioctlData, 1)
+            out = int(struct.unpack('<IIIIIQI', ioctlData)[5])
+        except Exception as e:
+            print(e)
+            return 0
+        return out
+
+    #########################################################################
+    # getBoardMAC --
+    #
+    #########################################################################
+    def getBoardMAC(self):
+        try:
+            ioctlData = bytearray(struct.pack('<IIIIIIII',
+                                              RPIQ_BUFFER_LEN,
+                                              RPIQ_PROCESS_REQ,
+                                              RPIQ_MBOX_TAG_BOARDMAC,
+                                              RPIQ_MBOX_BOARDMAC_LEN,
+                                              0, 0, 0, 0))
+            fcntl.ioctl(self.pimonDev,
+                        RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                        ioctlData, 1)
+            macShift = 16 # Top 6 bytes
+            unpacked = struct.unpack('<IIIIIQI', ioctlData)[5]
+            packed = struct.pack('>Q', unpacked)
+            masked = int(struct.unpack('<Q', packed)[0]) >> macShift
+            out = masked
+        except Exception as e:
+            print(e)
+            return 0
+        return out
+
+    #########################################################################
+    # getBoardSerial --
+    #
+    #########################################################################
+    def getBoardSerial(self):
+        try:
+            ioctlData = bytearray(struct.pack('<IIIIIIII',
+                                              RPIQ_BUFFER_LEN,
+                                              RPIQ_PROCESS_REQ,
+                                              RPIQ_MBOX_TAG_BOARDSERIAL,
+                                              RPIQ_MBOX_BOARDSERIAL_LEN,
+                                              0, 0, 0, 0))
+            fcntl.ioctl(self.pimonDev,
+                        RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                        ioctlData, 1)
             out = int(struct.unpack('<IIIIIIII', ioctlData)[5])
         except Exception as e:
-            # Typically, a timeout will have occurred
-            return None
+            print(e)
+            return 0
         return out
 
     #########################################################################
@@ -108,8 +201,8 @@ class PiMon:
                         ioctlData, 1)
             out = int(struct.unpack('<IIIIIIII', ioctlData)[6]) / 1000
         except Exception as e:
-            # Typically, a timeout will have occurred
-            return None
+            print(e)
+            return 0
         return out
 
     #########################################################################
@@ -130,6 +223,6 @@ class PiMon:
             print(struct.unpack('<IIIIIIII', ioctlData))
             out = int(struct.unpack('<IIIIIIII', ioctlData)[6]) / 1024 / 1024
         except Exception as e:
-            # Typically, a timeout will have occurred
-            return None
+            print(e)
+            return 0
         return out

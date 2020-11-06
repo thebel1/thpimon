@@ -186,9 +186,8 @@ init_module(void)
    }
 
    /*
-    * Init RPIQ driver & char dev driver
+    * Init char dev driver
     */
-   rpiq_drvInit(&pimon_Driver, &rpiq_Device);
    pimon_charDevInit(pimon_Driver.moduleID,
                      pimon_Driver.heapID,
                      pimon_Driver.logger);
@@ -222,6 +221,7 @@ heap_create_failed:
 void
 cleanup_module(void)
 {
+   rpiq_drvCleanUp();
    vmk_HeapDestroy(rpiq_Device.dmaHeapID);
    vmk_ACPIUnmapIOResource(pimon_Driver.moduleID, rpiq_Device.acpiDevice, 0);
    vmk_LogUnregister(pimon_Driver.logger);
@@ -254,8 +254,6 @@ pimon_attachDevice(vmk_Device device)
    vmk_ByteCount dmaHeapSize;
    vmk_HeapCreateProps heapProps;
    vmk_HeapID dmaHeapID;
-   vmk_SpinlockCreateProps mboxLockProps;
-   vmk_Lock mboxLock;
    rpiq_Device_t *adapter = &rpiq_Device;
 
    /*
@@ -370,32 +368,6 @@ pimon_attachDevice(vmk_Device device)
    }
 
    /*
-    * Create Mbox lock
-    */
-
-   // TODO: consider making this an MCS lock since the latency is quite high.
-   mboxLockProps.moduleID = pimon_Driver.moduleID;
-   mboxLockProps.heapID = pimon_Driver.heapID;
-   status = vmk_NameInitialize(&mboxLockProps.name, PIMON_DRIVER_NAME);
-   if (status != VMK_OK) {
-      vmk_Warning(pimon_Driver.logger,
-                  "failed to init lock name: %s",
-                  vmk_StatusToString(status));
-      goto lock_init_failed;
-   }
-
-   mboxLockProps.type = VMK_SPINLOCK;
-   mboxLockProps.domain = VMK_LOCKDOMAIN_INVALID;
-   mboxLockProps.rank = VMK_SPINLOCK_UNRANKED;
-   status = vmk_SpinlockCreate(&mboxLockProps, &mboxLock);
-   if (status != VMK_OK) {
-      vmk_Warning(pimon_Driver.logger,
-                  "failed to create spinlock: %s",
-                  vmk_StatusToString(status));
-      goto lock_init_failed;
-   }
-
-   /*
     * Init adapter
     */
    
@@ -411,10 +383,18 @@ pimon_attachDevice(vmk_Device device)
    adapter->mmioBase = (void *)mappedAddr.address.vaddr;
    adapter->mmioLen = mappedAddr.len;
    adapter->dmaHeapID = dmaHeapID;
-   vmk_Memcpy(&adapter->mboxLock,
-              mboxLock,
-              sizeof(adapter->mboxLock));
    adapter->initialized = VMK_TRUE;
+
+   /*
+    * Init RPIQ driver
+    */
+   status = rpiq_drvInit(&pimon_Driver, &rpiq_Device);
+   if (status != VMK_OK) {
+      vmk_Warning(pimon_Driver.logger,
+                  "failed to initialize RPIQ driver: %s",
+                  vmk_StatusToString(status));
+      goto rpiq_drv_init_failed;
+   }
 
    /*
     * Attach device
@@ -439,7 +419,7 @@ pimon_attachDevice(vmk_Device device)
    return VMK_OK;
 
 device_attach_failed:
-lock_init_failed:
+rpiq_drv_init_failed:
    vmk_HeapDestroy(rpiq_Device.dmaHeapID);
 
 dma_heap_create_failed:

@@ -23,7 +23,6 @@
 
 // TODO:
 // - Figure out if it's possible to support arbitrary length mbox buffers.
-// - Implement a lock to prevent concurrent access to mbox memory.
 // - Currently, the mbox buffer is copied four times: (1) from UW to kernel
 //   space, (2) from driver heap to DMA heap, (3) from DMA heap to driver heap,
 //   and (4) from kernel space to UW. Perhaps this could be simplified.
@@ -40,6 +39,7 @@
 
 static pimon_Driver_t *pimon_Driver;
 static rpiq_Device_t *rpiq_Device;
+static rpiq_MboxDMABuffer_t rpiq_MboxDMABuffer;
 
 /*
  ***********************************************************************
@@ -59,11 +59,81 @@ rpiq_drvInit(pimon_Driver_t *driver,
              rpiq_Device_t *adapter)
 {
    VMK_ReturnStatus status = VMK_OK;
+   vmk_MA dmaBufPtrMA;
+   vmk_SpinlockCreateProps lockProps;
 
    pimon_Driver = driver;
    rpiq_Device = adapter;
 
+   /*
+    * Allocate mbox DMA buffer. We allocate once and re-use it as a work-around,
+    * since repeated allocations will eventually allocate beyond 1GB. This in
+    * turn causes the VC to be unable to access it.
+    * 
+    * TODO: Program the DMA controller & move the aperture to match the
+    * allocation.
+    */
+   rpiq_MboxDMABuffer.ptr = vmk_HeapAlign(rpiq_Device->dmaHeapID,
+                                          sizeof(*rpiq_MboxDMABuffer.ptr),
+                                          RPIQ_DMA_MBOX_ALIGNMENT);
+
+   /* Verify that mbox buffer is below 2GB */
+   vmk_VA2MA((vmk_VA)rpiq_MboxDMABuffer.ptr, 0, &dmaBufPtrMA);
+   if (dmaBufPtrMA > RPIQ_DMA_MAX_ADDR) {
+      status = VMK_NO_MEMORY;
+      vmk_Warning(pimon_Driver->logger,
+                  "unable to allocate below 2GB");
+      goto dma_addr_invalid;
+   }
+
+   /*
+    * Init lock
+    */
+
+   lockProps.moduleID = pimon_Driver->moduleID;
+   lockProps.heapID = pimon_Driver->heapID;
+   status = vmk_NameInitialize(&lockProps.name, RPIQ_DMA_LOCK_NAME);
+   if (status != VMK_OK) {
+      vmk_Warning(pimon_Driver->logger,
+                  "failed to init DMA buffer lock name: %s",
+                  vmk_StatusToString(status));
+      goto lock_init_failed;
+   }
+
+   lockProps.type = VMK_SPINLOCK;
+   lockProps.domain = VMK_LOCKDOMAIN_INVALID;
+   lockProps.rank = VMK_SPINLOCK_UNRANKED;
+   status = vmk_SpinlockCreate(&lockProps, &rpiq_MboxDMABuffer.lock);
+   if (status != VMK_OK) {
+      vmk_Warning(pimon_Driver->logger,
+                  "failed to create DMA buffer spinlock: %s",
+                  vmk_StatusToString(status));
+      goto lock_init_failed;
+   }
+
+lock_init_failed:
+dma_addr_invalid:
+   vmk_HeapFree(rpiq_Device->dmaHeapID, rpiq_MboxDMABuffer.ptr);
    return status;
+}
+
+/*
+ ***********************************************************************
+ * rpiq_drvCleanUp --
+ * 
+ *    Clean up the RPIQ driver.
+ * 
+ * Results:
+ *    VMK_OK   on success, error code otherwise
+ * 
+ * Side Effects:
+ *    None
+ ***********************************************************************
+ */
+void
+rpiq_drvCleanUp()
+{
+   vmk_HeapFree(rpiq_Device->dmaHeapID, rpiq_MboxDMABuffer.ptr);
 }
 
 /*
@@ -85,20 +155,22 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
 {
    VMK_ReturnStatus status = VMK_OK;
    vmk_uint32 mboxStatus = RPIQ_MBOX_FULL;
-   rpiq_MboxBuffer_t *dmaBuf;
-   vmk_MA dmaBufMA;
+   rpiq_MboxDMABuffer_t *dmaBuf = &rpiq_MboxDMABuffer;
+   rpiq_MboxBuffer_t *dmaBufPtr = dmaBuf->ptr;
+   vmk_MA dmaBufPtrMA;
    vmk_uint32 mboxIn;
    vmk_uint32 mboxOut;
    vmk_uint32 mboxFullRetries = 0;
    vmk_uint32 mboxReadRetries = 0;
 
-   // TODO: implement locking
-   
    /*
     *-------------------------------------------------------------------
     * MBOX WRITE
     *-------------------------------------------------------------------
     */
+
+   /* Lock the DMA buffer */
+   vmk_SpinlockLock(dmaBuf->lock);
 
    /*
     * Spin until mbox is empty
@@ -120,7 +192,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
       vmk_Log(pimon_Driver->logger,
               "allocating from heap %p, size %d, alignment %d",
               rpiq_Device->dmaHeapID,
-              sizeof(*dmaBuf),
+              sizeof(*dmaBufPtr),
               RPIQ_DMA_MBOX_ALIGNMENT);
    }
 #endif /* RPIQ_DEBUG */
@@ -128,24 +200,21 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    /*
     * Copy buffer to location accessible by VC DMA
     */
-   dmaBuf = vmk_HeapAlign(rpiq_Device->dmaHeapID,
-                          sizeof(*dmaBuf),
-                          RPIQ_DMA_MBOX_ALIGNMENT);
-   vmk_Memcpy(dmaBuf, buffer, sizeof(*dmaBuf));
+   vmk_Memcpy(dmaBufPtr, buffer, sizeof(*dmaBufPtr));
 
    /*
     * Prepare mbox input data
     */
-   vmk_VA2MA((vmk_VA)dmaBuf, 0, &dmaBufMA);
-   mboxIn = ((vmk_uint32)dmaBufMA | (vmk_uint32)channel);
+   vmk_VA2MA((vmk_VA)dmaBufPtr, 0, &dmaBufPtrMA);
+   mboxIn = ((vmk_uint32)dmaBufPtrMA | (vmk_uint32)channel);
 
 #ifdef RPIQ_DEBUG
    {
       vmk_Log(pimon_Driver->logger,
               "writing mboxOut %p to DMA buffer %p (MA %p) on channel %d",
               mboxIn,
-              dmaBuf,
-              dmaBufMA,
+              dmaBufPtr,
+              dmaBufPtrMA,
               channel);
    }
 #endif /* RPIQ_DEBUG */
@@ -169,7 +238,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    /*
     * Invalidate, but do not evict dirty cache lines.
     */
-   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBuf);
+   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
 
    /*
     *-------------------------------------------------------------------
@@ -260,23 +329,29 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    /*
     * Flush cache and copy data back to in/out buffer
     */
-   // TODO: Figure out why the same data comes out as went in.
-   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBuf);
-   vmk_Memcpy(buffer, dmaBuf, sizeof(*buffer));
+   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
+   if (dmaBufPtr->header.requestResponse == RPIQ_PROCESS_REQ) {
+      status = VMK_FAILURE;
+      vmk_Warning(pimon_Driver->logger,
+                  "no response data received");
+      goto mbox_no_response;
+   }
+   vmk_Memcpy(buffer, dmaBufPtr, sizeof(*buffer));
 
-   vmk_HeapFree(rpiq_Device->dmaHeapID, dmaBuf);
+   /* Unlock the DMA buffer */
+   vmk_SpinlockUnlock(dmaBuf->lock);
 
    return VMK_OK;
 
+mbox_no_response:
 mbox_response_mismatch:
 mbox_read_attempts:
 mbox_read_failed:
 mbox_full_attempts:
 mbox_read_status_failed:
 mbox_write_failed:
-   vmk_HeapFree(rpiq_Device->dmaHeapID, dmaBuf);
-
 mbox_write_status_failed:
+   vmk_SpinlockUnlock(dmaBuf->lock);
    return status;
 }
 

@@ -39,6 +39,7 @@
 
 #define RPIQ_DMA_HEAP_NAME "rpiqDmaHeap"
 
+#define RPIQ_DMA_MAX_ADDR       ((vmk_VA)1<<32)
 #define RPIQ_DMA_MBOX_ALIGNMENT 16
 
 /* Maximum mbox objects to allocate on DMA heap */
@@ -57,6 +58,7 @@
 #define RPIQ_MBOX_STATUS   0x18
 #define RPIQ_MBOX_WRITE    0x20
 
+#define RPIQ_PROCESS_REQ   0x0
 #define RPIQ_MBOX_FULL     (1 << 31)
 #define RPIQ_MBOX_EMPTY    (1 << 30)
 
@@ -70,8 +72,8 @@
 /* Hardware */
 #define RPIQ_MBOX_TAG_BOARDMODEL     0x00010001
 #define RPIQ_MBOX_TAG_BOARDREV       0x00010002
-#define RPIQ_MBOX_TAG_HWMAC          0x00010003
-#define RPIQ_MBOX_TAG_HWSERIAL       0x00010004
+#define RPIQ_MBOX_TAG_BOARDMAC       0x00010003
+#define RPIQ_MBOX_TAG_BOARDSERIAL    0x00010004
 #define RPIQ_MBOX_TAG_ARMMEM         0x00010005
 #define RPIQ_MBOX_TAG_VCMEM          0x00010006
 #define RPIQ_MBOX_TAG_CLKS           0x00010007
@@ -105,6 +107,8 @@
 
 /***********************************************************************/
 
+#define RPIQ_DMA_LOCK_NAME "dmaBufLock"
+
 #define RPIQ_DMA_MEM_BARRIER() asm volatile ("dsb sy" ::: "memory")
 
 /*
@@ -113,6 +117,9 @@
  */
 #define RPIQ_DMA_FLUSH_DCACHE(_va)                                             \
    asm volatile ("dc ivac, %0" :: "r" (_va))
+
+#define RPIQ_DMA_CLEAN_DCACHE(_va)                                             \
+   asm volatile ("dc civac, %0" :: "r" (_va))
 
 /***********************************************************************/
 
@@ -130,8 +137,6 @@ typedef struct rpiq_Device_t {
    vmk_ByteCount mmioLen;
    /* DMA */
    vmk_HeapID dmaHeapID;
-   /* Mbox */
-   vmk_Lock mboxLock;
 } rpiq_Device_t;
 
 /*
@@ -163,10 +168,17 @@ typedef enum rpiq_MboxChannel_t {
    RPIQ_CHAN_MBOX_MAX            = RPIQ_CHAN_MBOX_PROP_ARM2VC,
 } rpiq_MboxChannel_t, rpiq_IoctlCommand_t;
 
+typedef struct rpiq_MboxDMABuffer_t {
+   rpiq_MboxBuffer_t *ptr;
+   vmk_Lock lock;
+} rpiq_MboxDMABuffer_t;
+
 /***********************************************************************/
 
 VMK_ReturnStatus rpiq_drvInit(pimon_Driver_t *driver,
                               rpiq_Device_t *adapter);
+
+void rpiq_drvCleanUp();
 
 VMK_ReturnStatus rpiq_mboxRead(rpiq_MboxChannel_t channel,
                                vmk_uint32 *response);
