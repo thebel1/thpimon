@@ -168,7 +168,7 @@ rpiq_mboxDrain()
       vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
                                RPIQ_MBOX_READ,
                                &mboxVal);
-   } while (retries++ < RPIQ_MBOX_MAX_RETRIES);
+   } while (++retries < RPIQ_MBOX_MAX_RETRIES);
 
    return VMK_TIMEOUT;
 }
@@ -201,7 +201,7 @@ rpiq_mboxStatusCleared(vmk_uint32 status)
          return VMK_OK;
       }
       RPIQ_DMA_MEM_BARRIER();
-   } while (retries++ < RPIQ_MBOX_MAX_RETRIES);
+   } while (++retries < RPIQ_MBOX_MAX_RETRIES);
 
    return VMK_TIMEOUT;
 }

@@ -47,7 +47,9 @@
 #define RPIQ_DMA_MBOX_OBJ_MAX       256
 
 #define RPIQ_MBOX_CHAN_MASK         15
-#define RPIQ_MBOX_MAX_RETRIES       0x2000
+
+/* Very generous to avoid sporadic timeouts */
+#define RPIQ_MBOX_MAX_RETRIES       0x4000
 
 /***********************************************************************/
 
