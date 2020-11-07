@@ -43,7 +43,9 @@ typedef struct pimon_Driver_t {
 
 /***********************************************************************/
 
-typedef struct rpiq_MboxBuffer_t rpiq_MboxBuffer_t;
+typedef struct pimon_IoctlHeader_t {
+   vmk_uint32 bufLen;
+} pimon_IoctlHeader_t;
 
 /*
  * Callbacks for gluing the char dev driver to the RPIQ driver
@@ -52,7 +54,7 @@ typedef VMK_ReturnStatus (*pimon_CharDevOpenCB_t)(vmk_CharDevFdAttr *attr);
 typedef VMK_ReturnStatus (*pimon_CharDevCloseCB_t)(vmk_CharDevFdAttr *attr);
 
 typedef VMK_ReturnStatus (*pimon_CharDevIoctlCB_t)(unsigned int cmd,
-                                                   rpiq_MboxBuffer_t *buffer);
+                                                   pimon_IoctlHeader_t *buffer);
 typedef VMK_ReturnStatus (*pimon_CharDevReadCB_t)(char *buffer,
                                                   vmk_ByteCount nbytes,
                                                   vmk_loff_t *ppos,
@@ -141,10 +143,10 @@ typedef struct rpiq_MboxBuffer_t {
  */
 typedef enum rpiq_MboxChannel_t {
    /* Update the min value when adding elements */
-   RPIQ_CMD_MBOX_MIN             = 8,
+   RPIQ_IOCTL_CMD_MIN            = 8,
    RPIQ_CHAN_MBOX_PROP_ARM2VC    = 8,
-   RPIQ_CMD_ALLOC_FBUF           = 16,
-   RPIQ_CMD_MBOX_MAX             = RPIQ_CMD_ALLOC_FBUF,
+   RPIQ_CMD_ALLOC_FBUF           = 24,
+   RPIQ_IOCTL_CMD_MAX            = RPIQ_CMD_ALLOC_FBUF,
 } rpiq_MboxChannel_t, rpiq_IoctlCommand_t;
 
 typedef struct rpiq_MboxDMABuffer_t {
@@ -153,9 +155,10 @@ typedef struct rpiq_MboxDMABuffer_t {
 } rpiq_MboxDMABuffer_t;
 
 typedef struct rpiq_FbufIoctlData_t {
-   vmk_uint32        width;
-   vmk_uint32        height;
-   vmk_uint32        depth;
+   pimon_IoctlHeader_t  header;
+   vmk_uint32           width;
+   vmk_uint32           height;
+   vmk_uint32           depth;
 } rpiq_FbufIoctlData_t;
 
 typedef struct rpiq_FbufMboxBuffer_t {

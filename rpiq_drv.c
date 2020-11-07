@@ -222,8 +222,7 @@ rpiq_mboxStatusCleared(vmk_uint32 status)
  */
 VMK_ReturnStatus
 rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
-              rpiq_MboxHeader_t *buffer,  // IN/OUT
-              vmk_ByteCount bufSize)
+              rpiq_MboxBuffer_t *buffer)  // IN/OUT)
 {
    VMK_ReturnStatus status = VMK_OK;
    rpiq_MboxDMABuffer_t *dmaBuf = &rpiq_MboxDMABuffer;
@@ -233,11 +232,11 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
    vmk_uint32 mboxOut;
    vmk_uint32 mboxReadRetries = 0;
 
-   if (bufSize > RPIQ_MBOX_BUFFER_SIZE) {
+   if (buffer->header.bufLen > RPIQ_MBOX_BUFFER_SIZE) {
       status = VMK_NOT_SUPPORTED;
       vmk_Warning(pimon_Driver->logger,
                   "cannot allocate mbox buffer of size %d",
-                  bufSize);
+                  buffer->header.bufLen);
       goto buf_too_large;
    }
 
@@ -272,7 +271,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
    /*
     * Copy buffer to location accessible by VC DMA
     */
-   vmk_Memcpy(dmaBufPtr, buffer, bufSize);
+   vmk_Memcpy(dmaBufPtr, buffer, buffer->header.bufLen);
 
    /*
     * Prepare mbox input data
@@ -352,8 +351,8 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
     */
 
    RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
-   vmk_Memcpy(buffer, dmaBufPtr, bufSize);
-   if (buffer->requestResponse != RPIQ_MBOX_SUCCESS) {
+   vmk_Memcpy(buffer, dmaBufPtr, buffer->header.bufLen);
+   if (buffer->header.requestResponse != RPIQ_MBOX_SUCCESS) {
       status = VMK_FAILURE;
       vmk_Warning(pimon_Driver->logger,
                   "no response data received");
@@ -389,12 +388,9 @@ buf_too_large:
  ***********************************************************************
  */
 VMK_ReturnStatus
-rpiq_fbufAlloc(unsigned int cmd,           // IN
-               void *data,                 // IN/OUT
-               vmk_ByteCount ioctlDataLen) // IN
+rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
 {
    VMK_ReturnStatus status = VMK_OK;
-   rpiq_FbufIoctlData_t *ioctlData = (rpiq_FbufIoctlData_t *)data;
    rpiq_FbufMboxBuffer_t mboxCmd;
 
    mboxCmd.header.bufLen            = sizeof(mboxCmd);
@@ -418,8 +414,7 @@ rpiq_fbufAlloc(unsigned int cmd,           // IN
    mboxCmd.endTag                   = 0;
 
    status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          (rpiq_MboxHeader_t *)&mboxCmd,
-                          sizeof(mboxCmd));
+                          (rpiq_MboxBuffer_t *)&mboxCmd);
 
    vmk_Log(pimon_Driver->logger,
            "got frame buffer MA %p",
@@ -490,44 +485,48 @@ rpiq_mmioCloseCB(vmk_CharDevFdAttr *attr)
  ***********************************************************************
  */
 VMK_ReturnStatus
-rpiq_mmioIoctlCB(unsigned int cmd,           // IN
-                 rpiq_MboxBuffer_t *buffer)  // IN/OUT
+rpiq_mmioIoctlCB(unsigned int cmd,                 // IN
+                 pimon_IoctlHeader_t *ioctlData)   // IN/OUT
 {
    VMK_ReturnStatus status = VMK_OK;
    unsigned int channel;
-
-   // TODO: add support for arbitrary length mailbox data, to allow for things
-   // like requesting console data.
 
    /*
     * Sanity checks
     */
 
-   if (buffer == NULL
-       || buffer->header.bufLen < 0
-       || buffer->header.bufLen > RPIQ_MBOX_BUFFER_SIZE) {
+   if (ioctlData == NULL
+       || ioctlData->bufLen < 0
+       || ioctlData->bufLen > RPIQ_MBOX_BUFFER_SIZE) {
       status = VMK_BAD_PARAM;
       vmk_Warning(pimon_Driver->logger, "invalid ioctl data");
       goto invalid_ioctl_data;
    }
 
-   if (cmd < RPIQ_CMD_MBOX_MIN
-       || cmd > RPIQ_CMD_MBOX_MAX) {
+   if (cmd < RPIQ_IOCTL_CMD_MIN
+       || cmd > RPIQ_IOCTL_CMD_MAX) {
       status = VMK_BAD_PARAM;
       vmk_Warning(pimon_Driver->logger, "ioctl command %d invalid", cmd);
       goto invalid_ioct_channel;
    }
 
    /*
-    * Mbox I/O
+    * Execute ioctl command
     */
+   
    channel = cmd & RPIQ_MBOX_CHAN_MASK;
-   status = rpiq_mboxSend(channel,
-                          (rpiq_MboxHeader_t *)buffer,
-                          buffer->header.bufLen);
+   switch (cmd) {
+      case RPIQ_CMD_ALLOC_FBUF:
+         status = rpiq_fbufAlloc((rpiq_FbufIoctlData_t *)ioctlData);
+         break;
+      default:
+         status = rpiq_mboxSend(channel, (rpiq_MboxBuffer_t *)ioctlData);
+   }
+
    if (status != VMK_OK) {
       vmk_Warning(pimon_Driver->logger,
-                  "unable to send to mailbox: %s",
+                  "unable to execute ioctl command %d: %s",
+                  cmd,
                   vmk_StatusToString(status));
       goto mbox_send_failed;
    }

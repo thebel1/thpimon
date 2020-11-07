@@ -143,15 +143,10 @@ VMK_ReturnStatus rpiq_drvInit(pimon_Driver_t *driver,
 
 void rpiq_drvCleanUp();
 
-VMK_ReturnStatus rpiq_mboxRead(rpiq_MboxChannel_t channel,
-                               vmk_uint32 *response);
+VMK_ReturnStatus rpiq_mboxSend(rpiq_MboxChannel_t channel,
+                               rpiq_MboxBuffer_t *buffer);
 
-VMK_ReturnStatus rpiq_mboxWrite(rpiq_MboxChannel_t channel,
-                                rpiq_MboxBuffer_t *buffer);
-
-VMK_ReturnStatus rpiq_fbufAlloc(unsigned int cmd, 
-                                void *data,
-                                vmk_ByteCount ioctlDataLen);
+VMK_ReturnStatus rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData);
 
 /*
  * MMIO callbacks
@@ -162,7 +157,7 @@ VMK_ReturnStatus rpiq_mmioOpenCB(vmk_CharDevFdAttr *attr);
 VMK_ReturnStatus rpiq_mmioCloseCB(vmk_CharDevFdAttr *attr);
 
 VMK_ReturnStatus rpiq_mmioIoctlCB(unsigned int cmd,
-                                  rpiq_MboxBuffer_t *buffer);
+                                  pimon_IoctlHeader_t *data);
 
 VMK_ReturnStatus rpiq_mmioReadCB(char *buffer,
                                  vmk_ByteCount nbytes,
