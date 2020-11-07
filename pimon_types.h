@@ -123,6 +123,8 @@ typedef struct rpiq_Device_t {
  * Data structures for passing data between UW and RPIQ interface.
  */
 
+#pragma pack(push, 1)
+
 typedef struct rpiq_MboxHeader_t {
    vmk_uint32 bufLen;
    vmk_uint32 requestResponse;
@@ -131,7 +133,7 @@ typedef struct rpiq_MboxHeader_t {
 typedef struct rpiq_MboxBuffer_t {
    rpiq_MboxHeader_t header;
    vmk_uint32 tag;
-   vmk_uint32 responseLen;
+   vmk_uint32 tagLen;
    vmk_uint32 response[2];
    vmk_uint32 endTag;
    vmk_uint32 padding[2];
@@ -159,30 +161,42 @@ typedef struct rpiq_FbufIoctlData_t {
    vmk_uint32           width;
    vmk_uint32           height;
    vmk_uint32           depth;
+   void                 *bitmap;
 } rpiq_FbufIoctlData_t;
 
 typedef struct rpiq_FbufMboxBuffer_t {
    rpiq_MboxHeader_t header;
-   vmk_uint32        physSizeTag;
-   vmk_uint32        physSizeTagSize;
-   vmk_uint32        physSizeWidth;
-   vmk_uint32        physSizeHeight;
-   vmk_uint32        virtSizeTag;
-   vmk_uint32        virtSizeTagSize;
-   vmk_uint32        virtSizeWidth;
-   vmk_uint32        virtSizeHeight;
-   vmk_uint32        depthTag;
-   vmk_uint32        depthTagSize;
-   vmk_uint32        depth;
-   vmk_uint32        allocFbufTag;
-   vmk_uint32        allocFbufTagSize;
-   vmk_uint32        allocFbufAlign;
-   vmk_uint32        allocFbufSize;
-   vmk_uint32        pitchTag;
-   vmk_uint32        pitchTagSize;
-   vmk_uint32        pitch;
-   vmk_uint32        endTag;
+   vmk_uint32 physSizeTag;
+   vmk_uint32 physSizeTagSize;
+   vmk_uint32 physSizeTagValueSize;
+   vmk_uint32 physSizeWidth;
+   vmk_uint32 physSizeHeight;
+   vmk_uint32 virtSizeTag;
+   vmk_uint32 virtSizeTagSize;
+   vmk_uint32 virtSizeTagvalueSize;
+   vmk_uint32 virtSizeWidth;
+   vmk_uint32 virtSizeHeight;
+   vmk_uint32 depthTag;
+   vmk_uint32 depthTagSize;
+   vmk_uint32 depthTagValueSize;
+   vmk_uint32 depth;
+   vmk_uint32 allocFbufTag;
+   vmk_uint32 allocFbufTagSize;
+   vmk_uint32 allocFbufTagValueSize;
+   vmk_uint32 allocFbufAlignBase;
+   vmk_uint32 allocFbufBase;
+   vmk_uint32 allocFbufSize;
+   vmk_uint32 pitchTag;
+   vmk_uint32 pitchTagSize;
+   vmk_uint32 pitchTagValueSize;
+   vmk_uint32 endTag;
 } rpiq_FbufMboxBuffer_t;
+
+#pragma pack(pop)
+
+typedef struct rpiq_FrameBuffer_t {
+
+} rpiq_FrameBuffer_t;
 
 /***********************************************************************/
 

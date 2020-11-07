@@ -237,17 +237,14 @@ class PiMon:
     #########################################################################
     def getScreenshot(self):
         try:
-            ioctlData = bytearray(struct.pack('<IIIIIIII',
-                                              RPIQ_BUFFER_LEN,
-                                              RPIQ_PROCESS_REQ,
-                                              RPIQ_MBOX_TAG_ALLOC_FBUF,
-                                              RPIQ_MBOX_ALLOC_FBUF_LEN,
-                                              32, 0, 0, 0))
+            bufLen = 24
+            ioctlData = bytearray(struct.pack('<IIIII', bufLen,
+                                              800, 600, 32, 0))
             fcntl.ioctl(self.pimonDev,
                         RPIQ_CMD_ALLOC_FBUF,
                         ioctlData, 1)
-            print(struct.unpack('<IIIIIIII', ioctlData))
-            out = int(struct.unpack('<IIIIIIII', ioctlData)[6]) / 1000
+            print(struct.unpack('<IIIII', ioctlData))
+            out = 0
         except Exception as e:
             print(e)
             return 0

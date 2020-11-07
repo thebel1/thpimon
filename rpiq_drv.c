@@ -355,7 +355,8 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
    if (buffer->header.requestResponse != RPIQ_MBOX_SUCCESS) {
       status = VMK_FAILURE;
       vmk_Warning(pimon_Driver->logger,
-                  "no response data received");
+                  "transaction error: 0x%x",
+                  buffer->header.requestResponse);
    }
 
    /* Unlock the DMA buffer */
@@ -391,37 +392,243 @@ VMK_ReturnStatus
 rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
 {
    VMK_ReturnStatus status = VMK_OK;
-   rpiq_FbufMboxBuffer_t mboxCmd;
+   vmk_MapRequest mapReq;
+   vmk_uint32 buffer[9];
+   vmk_uint32 width, height;
+   vmk_MA fbufMA;
+   vmk_uint32 fbufLen;
+   vmk_MPN firstMPN, lastMPN;
+   vmk_MpnRange mpnRange;
+   vmk_VA fbufVA;
+   rpiq_FrameBuffer_t *fbuf;
 
-   mboxCmd.header.bufLen            = sizeof(mboxCmd);
+   buffer[0] = 4 * 8;
+   buffer[1] = RPIQ_PROCESS_REQ;
+   buffer[2] = RPIQ_MBOX_TAG_GET_FB_PHYS;
+   buffer[3] = 2 * sizeof(vmk_uint32);
+   buffer[4] = 0;
+   buffer[5] = 0;
+   buffer[6] = 0;
+   buffer[7] = 0;
+   buffer[8] = 0;
+
+   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                          (rpiq_MboxBuffer_t *)&buffer);
+
+   width = buffer[5];
+   height = buffer[6];
+
+   vmk_Log(pimon_Driver->logger,
+           "buf[0]=%d buf[1]=%d buf[2]=%d buf[3]=%d buf[4]=%d buf[5]=%d"
+           " buf[6]=%d buf[7]=%d buf[8]=%d",
+           buffer[0],
+           buffer[1],
+           buffer[2],
+           buffer[3],
+           buffer[4],
+           buffer[5],
+           buffer[6],
+           buffer[7],
+           buffer[8]);
+
+   /*mboxCmd.header.bufLen            = sizeof(mboxCmd);
    mboxCmd.header.requestResponse   = RPIQ_PROCESS_REQ;
    mboxCmd.physSizeTag              = RPIQ_MBOX_TAG_SET_FB_PHYS;
    mboxCmd.physSizeTagSize          = 2 * sizeof(vmk_uint32);
-   mboxCmd.physSizeWidth            = ioctlData->width;
-   mboxCmd.physSizeHeight           = ioctlData->height;
+   mboxCmd.physSizeTagValueSize     = 0;
+   mboxCmd.physSizeWidth            = width;
+   mboxCmd.physSizeHeight           = height;
    mboxCmd.virtSizeTag              = RPIQ_MBOX_TAG_SET_FB_VIRT;
    mboxCmd.virtSizeTagSize          = 2 * sizeof(vmk_uint32);
-   mboxCmd.virtSizeWidth            = ioctlData->width;
-   mboxCmd.virtSizeHeight           = ioctlData->height;
+   mboxCmd.virtSizeTagvalueSize     = 0;
+   mboxCmd.virtSizeWidth            = width;
+   mboxCmd.virtSizeHeight           = height;
    mboxCmd.depthTag                 = RPIQ_MBOX_TAG_SET_FB_DEPTH;
    mboxCmd.depthTagSize             = sizeof(vmk_uint32);
-   mboxCmd.depth                    = ioctlData->depth;
+   mboxCmd.depthTagValueSize        = 0;
+   mboxCmd.depth                    = 32;
    mboxCmd.allocFbufTag             = RPIQ_MBOX_TAG_ALLOC_FB;
    mboxCmd.allocFbufTagSize         = 2 * sizeof(vmk_uint32);
-   mboxCmd.allocFbufAlign           = RPIQ_DMA_FBUF_ALIGNMENT;
-   mboxCmd.pitchTag                 = RPIQ_MBOX_TAG_GET_FB_LINE;
+   mboxCmd.allocFbufTagValueSize    = 0;
+   mboxCmd.allocFbufAlignBase       = 0;
+   mboxCmd.allocFbufSize            = 0;
+   mboxCmd.pitchTag                 = RPIQ_MBOX_TAG_GET_PITCH;
    mboxCmd.pitchTagSize             = sizeof(vmk_uint32);
+   mboxCmd.pitchTagValueSize        = 0;
    mboxCmd.endTag                   = 0;
 
    status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          (rpiq_MboxBuffer_t *)&mboxCmd);
+                          (rpiq_MboxBuffer_t *)&mboxCmd);*/
+
+/*#ifdef RPIQ_DEBUG
+   vmk_Log(pimon_Driver->logger,
+           "\nmboxCmd.header.bufLen=%d"
+           "\nmboxCmd.header.requestResponse=0x%x"
+           "\nmboxCmd.physSizeTag=0x%x"
+           "\nmboxCmd.physSizeTagSize=%d"
+           "\nmboxCmd.physSizeTagValueSize=%d",
+           mboxCmd.header.bufLen,
+           mboxCmd.header.requestResponse,
+           mboxCmd.physSizeTag,
+           mboxCmd.physSizeTagSize,
+           mboxCmd.physSizeTagValueSize);
+   
+   vmk_Log(pimon_Driver->logger,
+           "\nmboxCmd.physSizeWidth=%d"
+           "\nmboxCmd.physSizeHeight=%d"
+           "\nmboxCmd.virtSizeTag=0x%x"
+           "\nmboxCmd.virtSizeTagSize=%d"
+           "\nmboxCmd.virtSizeTagvalueSize=%d",
+           mboxCmd.physSizeWidth,
+           mboxCmd.physSizeHeight,
+           mboxCmd.virtSizeTag,
+           mboxCmd.virtSizeTagSize,
+           mboxCmd.virtSizeTagvalueSize);
 
    vmk_Log(pimon_Driver->logger,
-           "got frame buffer MA %p",
-           mboxCmd.allocFbufAlign);
+           "\nmboxCmd.virtSizeWidth=%d"
+           "\nmboxCmd.virtSizeHeight=%d"
+           "\nmboxCmd.depthTag=0x%x"
+           "\nmboxCmd.depthTagSize=%d"
+           "\nmboxCmd.depthTagValueSize=%d",
+           mboxCmd.virtSizeWidth,
+           mboxCmd.virtSizeHeight,
+           mboxCmd.depthTag,
+           mboxCmd.depthTagSize,
+           mboxCmd.depthTagValueSize);
+
+   vmk_Log(pimon_Driver->logger,
+           "\nmboxCmd.depth=%d"
+           "\nmboxCmd.allocFbufTag=0x%x"
+           "\nmboxCmd.allocFbufTagSize=%d"
+           "\nmboxCmd.allocFbufTagValueSize=%d"
+           "\nmboxCmd.allocFbufAlignBase=%d",
+           mboxCmd.depth,
+           mboxCmd.allocFbufTag,
+           mboxCmd.allocFbufTagSize,
+           mboxCmd.allocFbufTagValueSize,
+           mboxCmd.allocFbufAlignBase);
+
+   vmk_Log(pimon_Driver->logger,
+           "\nmboxCmd.allocFbufSize=%d"
+           "\nmboxCmd.pitchTag=0x%x"
+           "\nmboxCmd.pitchTagSize=%d"
+           "\nmboxCmd.pitchTagValueSize=%d"
+           "\nmboxCmd.endTag=%d",
+           mboxCmd.allocFbufSize,
+           mboxCmd.pitchTag,
+           mboxCmd.pitchTagSize,
+           mboxCmd.pitchTagValueSize,
+           mboxCmd.endTag);
+#endif*/ /* RPIQ_DEBUG */
+
+   buffer[0] = 4 * 8;
+   buffer[1] = RPIQ_PROCESS_REQ;
+   buffer[2] = RPIQ_MBOX_TAG_ALLOC_FB;
+   buffer[3] = 2 * sizeof(vmk_uint32);
+   buffer[4] = 0;
+   buffer[5] = 0;
+   buffer[6] = 0;
+   buffer[7] = 0;
+   buffer[8] = 0;
+
+   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                          (rpiq_MboxBuffer_t *)&buffer);
+
+   /*
+    * Map the returned frame buffer, copy it, then unmap it
+    */
+
+   fbufMA = buffer[5] ^ RPIQ_DMA_COHERENT_ADDR;
+   fbufLen = buffer[6];
+   firstMPN = vmk_MA2MPN(fbufMA);
+   lastMPN = vmk_MA2MPN(fbufMA + fbufLen - 1);
+
+   vmk_Memset(&mpnRange, 0, sizeof(mpnRange));
+   mpnRange.startMPN = firstMPN;
+   mpnRange.numPages = lastMPN - firstMPN;
+
+   vmk_Memset(&mapReq, 0, sizeof(mapReq));
+   mapReq.mapType = VMK_MAPTYPE_DEFAULT;
+   mapReq.mapAttrs = VMK_MAPATTRS_READONLY;
+   mapReq.numElements = 1;
+   mapReq.mpnRanges = &mpnRange;
+   mapReq.reservation = NULL;
+
+   status = vmk_Map(pimon_Driver->moduleID, &mapReq, &fbufVA);
+
+   fbuf = vmk_HeapAlloc(pimon_Driver->heapID, fbufLen);
+   if (fbuf == NULL) {
+      status = VMK_NO_MEMORY;
+      vmk_Warning(pimon_Driver->logger,
+                  "unable to allocate frame buffer: %s",
+                  vmk_StatusToString(status));
+      goto fbuf_alloc_failed;
+   }
+   vmk_Memcpy((void *)fbuf, (void *)fbufVA, fbufLen);
+
+   //vmk_Unmap(fbufVA);
+
+   vmk_Log(pimon_Driver->logger,
+           "buf[0]=%d buf[1]=%d buf[2]=%d buf[3]=%d buf[4]=%d buf[5]=%d"
+           " buf[6]=%d buf[7]=%d buf[8]=%d",
+           buffer[0],
+           buffer[1],
+           buffer[2],
+           buffer[3],
+           buffer[4],
+           buffer[5],
+           buffer[6],
+           buffer[7],
+           buffer[8]);
+
+   vmk_Log(pimon_Driver->logger,
+           "width %d height %d size %d fbuf MA 0x%x VA %p / %p",
+           width, height, fbufLen, fbufMA, fbufVA, fbuf);
+
+/*
+   vmk_uint32 buffer[8];
+   vmk_Memset(buffer, 0, 32);
+   buffer[0] = sizeof(buffer);
+   buffer[1] = RPIQ_PROCESS_REQ;
+   buffer[2] = RPIQ_MBOX_TAG_ALLOC_FB;
+   buffer[3] = 2 * sizeof(vmk_uint32);
+   buffer[4] = RPIQ_DMA_FBUF_ALIGNMENT;
+   buffer[5] = 0;
+   buffer[6] = 0;
+   buffer[7] = 0;
+   mboxBuf = (rpiq_MboxBuffer_t *)&buffer;
+
+   vmk_Log(pimon_Driver->logger,
+           "bufLen=%d rqRp=0x%x tag=0x%x tagLen=%d align=%d endTag=%d"
+           " padding[0]=%d padding[1]=%d",
+           mboxBuf->header.bufLen,
+           mboxBuf->header.requestResponse,
+           mboxBuf->tag,
+           mboxBuf->tagLen,
+           buffer[5],
+           buffer[6],
+           buffer[7]);
+
+   vmk_Log(pimon_Driver->logger, "sending");
+   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                          mboxBuf);
+
+   vmk_Log(pimon_Driver->logger,
+           "bufLen=%d rqRp=0x%x tag=0x%x tagLen=%d align=%d endTag=%d"
+           " padding[0]=%d padding[1]=%d",
+           mboxBuf->header.bufLen,
+           mboxBuf->header.requestResponse,
+           mboxBuf->tag,
+           mboxBuf->tagLen,
+           buffer[5],
+           buffer[6],
+           buffer[7]);
+*/
 
    return VMK_OK;
 
+fbuf_alloc_failed:
    return status;
 }
 

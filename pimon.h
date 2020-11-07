@@ -31,9 +31,9 @@
 
 #define PIMON_DRIVER_NAME "thpimon"
 
-// Probably overkill
-#define PIMON_HEAP_INITIAL_SIZE (1024 * 1024)
-#define PIMON_HEAP_MAX_SIZE (2 * 1024 * 1024)
+/* Large size is there to accommodate frame buffer */
+#define PIMON_HEAP_INITIAL_SIZE (10 * 1024 * 1024)
+#define PIMON_HEAP_MAX_SIZE (50 * 1024 * 1024)
 
 #define PIMON_INT_MAX ((vmk_uint32)~0)
 
