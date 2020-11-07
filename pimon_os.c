@@ -43,7 +43,7 @@ static pimon_Driver_t pimon_Driver;
 static rpiq_Device_t rpiq_Device;
 
 /* For RPIQ char dev */
-static pimon_CharDev_t rpiq_CharDev;
+static pimon_CharDev_t rpiq_mboxCharDev;
 static vmk_BusType rpiq_logicalBusType;
 
 VMK_ReturnStatus pimon_attachDevice(vmk_Device device);
@@ -65,7 +65,8 @@ static vmk_DriverOps pimon_DriverOps = {
 /*
  * Callbacks gluing the chardev driver to the RPIQ driver.
  */
-static pimon_CharDevCallbacks_t rpiq_CharDevCBs = {
+
+static pimon_CharDevCallbacks_t rpiq_mboxCharDevCBs = {
    .open = rpiq_mmioOpenCB,
    .close = rpiq_mmioCloseCB,
    .ioctl = rpiq_mmioIoctlCB,
@@ -148,7 +149,7 @@ init_module(void)
    }
 
    /*
-    * Init logical bus for char dev
+    * Init logical bus for char devs
     */
 
    status = vmk_NameInitialize(&charDevBusName, VMK_LOGICAL_BUS_NAME);
@@ -344,7 +345,7 @@ pimon_attachDevice(vmk_Device device)
    status = vmk_NameInitialize(&heapProps.name, RPIQ_DMA_HEAP_NAME);
    VMK_ASSERT(status == VMK_OK);
 
-   heapAllocDesc.size = sizeof(rpiq_MboxBuffer_t);
+   heapAllocDesc.size = RPIQ_MBOX_BUFFER_SIZE;
    heapAllocDesc.alignment = RPIQ_DMA_MBOX_ALIGNMENT;
    heapAllocDesc.count = RPIQ_DMA_MBOX_OBJ_MAX;
 
@@ -454,29 +455,40 @@ VMK_ReturnStatus
 pimon_scanDevice(vmk_Device device)
 {
    VMK_ReturnStatus status = VMK_OK;
-   pimon_CharDevPriv_t *privData;
-   pimon_CharDevProps_t charDevProps;
+   pimon_CharDevPriv_t *mboxPriv;
+   pimon_CharDevProps_t mboxDevProps;
 
-   /* We only allow data to be transmitted in a particular size */
-   privData = vmk_HeapAlloc(pimon_Driver.heapID, sizeof(*privData));
-   if (privData == NULL) {
+   /*
+    * Create VC mbox char device
+    */
+
+   mboxPriv = vmk_HeapAlloc(pimon_Driver.heapID, sizeof(*mboxPriv));
+   if (mboxPriv == NULL) {
       status = VMK_NO_MEMORY;
-      vmk_Warning(pimon_Driver.logger, "unable to allocate char dev priv data");
-      goto priv_alloc_failed;
+      vmk_Warning(pimon_Driver.logger,
+                  "unable to allocate mbox char dev priv data");
+      goto mbox_priv_failed;
    }
-   privData->ioctlDataLen = sizeof(rpiq_MboxBuffer_t);
+   mboxPriv->ioctlDataLen = RPIQ_MBOX_BUFFER_SIZE;
+   mboxPriv->callbacks = &rpiq_mboxCharDevCBs;
 
-   charDevProps.driverHandle = pimon_Driver.driverHandle;
-   charDevProps.logicalBusType = rpiq_logicalBusType;
-   charDevProps.parentDevice = device;
-   charDevProps.charDev = &rpiq_CharDev;
-   charDevProps.logicalPort = 0;
-   charDevProps.privData = privData;
-   charDevProps.callbacks = &rpiq_CharDevCBs;
+   mboxDevProps.driverHandle = pimon_Driver.driverHandle;
+   mboxDevProps.logicalBusType = rpiq_logicalBusType;
+   mboxDevProps.parentDevice = device;
+   mboxDevProps.charDev = &rpiq_mboxCharDev;
+   mboxDevProps.logicalPort = 0;
+   mboxDevProps.privData = mboxPriv;
    
-   status = pimon_charDevRegister(&charDevProps);
+   status = pimon_charDevRegister(&mboxDevProps);
+   if (status != VMK_OK) {
+      vmk_Warning(pimon_Driver.logger, "unable to create mbox char dev");
+      goto mbox_chardev_failed;
+   }
 
-priv_alloc_failed:
+   return VMK_OK;
+
+mbox_chardev_failed:
+mbox_priv_failed:
    return status;
 }
 

@@ -57,11 +57,6 @@ static vmk_DeviceOps pimon_CharVmkDevOps = {
    .removeDevice = pimon_charVmkDevRemove,
 };
 
-/*
- * Call backs that glue the char dev to the GPIO driver
- */
-static pimon_CharDevCallbacks_t *pimon_CharDevCBs;
-
 /***********************************************************************/
 
 static vmk_TimerQueue pimon_charDevTimerQueue;
@@ -163,6 +158,7 @@ pimon_charDevRegister(pimon_CharDevProps_t *props)
                   vmk_StatusToString(status));
       goto register_device_failed;
    }
+   props->privData->logicalDev = newDevice;
 
    status = vmk_LogicalFreeBusAddress(props->driverHandle,
                                       devID.busAddress);
@@ -172,11 +168,6 @@ pimon_charDevRegister(pimon_CharDevProps_t *props)
                   vmk_StatusToString(status));
       goto free_bus_failed;
    }
-
-   /*
-    * Set CBs
-    */
-   pimon_CharDevCBs = props->callbacks;
 
    return VMK_OK;
 
@@ -298,6 +289,7 @@ pimon_charDevOpen(vmk_CharDevFdAttr *attr)
 {
    VMK_ReturnStatus status = VMK_OK;
    pimon_CharFileData_t *fileData;
+   pimon_CharDevPriv_t *privData = (pimon_CharDevPriv_t *)attr->clientDeviceData.ptr;
    vmk_SpinlockCreateProps lockProps;
 
    /*
@@ -363,7 +355,7 @@ pimon_charDevOpen(vmk_CharDevFdAttr *attr)
 #endif /* PIMON_DEBUG */
 
    /* Call CB */
-   status = pimon_CharDevCBs->open(attr);
+   status = privData->callbacks->open(attr);
 
    return status;
 
@@ -392,6 +384,7 @@ pimon_charDevClose(vmk_CharDevFdAttr *attr)
 {
    VMK_ReturnStatus status = VMK_OK;
    pimon_CharFileData_t *fileData = attr->clientInstanceData.ptr;
+   pimon_CharDevPriv_t *privData = (pimon_CharDevPriv_t *)attr->clientDeviceData.ptr;
 
    if (fileData == NULL) {
       status = VMK_BAD_PARAM;
@@ -409,7 +402,7 @@ pimon_charDevClose(vmk_CharDevFdAttr *attr)
    }
 
    /* Call CB */
-   status = pimon_CharDevCBs->close(attr);
+   status = privData->callbacks->close(attr);
 
 file_data_null:
    return status;
@@ -437,9 +430,10 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
                    vmk_int32 *result)
 {
    VMK_ReturnStatus status = VMK_OK;
-   void *ioctlData;
-   vmk_ByteCount ioctlDataLen;
+   rpiq_MboxHeader_t mboxHeader;
+   rpiq_MboxBuffer_t *mboxBuffer;
    pimon_CharFileData_t *fileData = attr->clientInstanceData.ptr;
+   pimon_CharDevPriv_t *privData = (pimon_CharDevPriv_t *)attr->clientDeviceData.ptr;
 
    if (fileData == NULL) {
       status = VMK_BAD_PARAM;
@@ -448,11 +442,25 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
    }
 
    /*
-    * Allocate ioctl data
+    * Sanity check for VC mbox buffer size
     */
-   ioctlDataLen = ((pimon_CharDevPriv_t *)attr->clientDeviceData.ptr)->ioctlDataLen;
-   ioctlData = vmk_HeapAlloc(pimon_heapID, ioctlDataLen);
-   if (ioctlData == NULL) {
+   vmk_CopyFromUser((vmk_VA)&mboxHeader,
+                    (vmk_VA)userData,
+                    sizeof(mboxHeader));
+   if (mboxHeader.bufLen < 0
+       || mboxHeader.bufLen > RPIQ_MBOX_BUFFER_SIZE) {
+      status = VMK_BAD_PARAM;
+      vmk_Warning(pimon_logger,
+                  "invalid VC mbox buffer size: %d",
+                  mboxHeader.bufLen);
+      goto mbox_header_invalid;
+   }
+
+   /*
+    * Allocate mbox buffer
+    */
+   mboxBuffer = vmk_HeapAlloc(pimon_heapID, mboxHeader.bufLen);
+   if (mboxBuffer == NULL) {
       status = VMK_NO_MEMORY;
       vmk_Warning(pimon_logger,
                   "failed to allocate memory for ioctl data: %s",
@@ -465,16 +473,16 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
       vmk_Log(pimon_logger,
               "copying ioctl data from %p (UW) to %p (vmk)",
               (vmk_VA)userData,
-              (vmk_VA)ioctlData);
+              (vmk_VA)mboxBuffer);
    }
 #endif /* PIMON_DEBUG */
 
    /*
     * Copy ioctl data from UW
     */
-   status = vmk_CopyFromUser((vmk_VA)ioctlData,
+   status = vmk_CopyFromUser((vmk_VA)mboxBuffer,
                              (vmk_VA)userData,
-                             ioctlDataLen);
+                             mboxHeader.bufLen);
    if (status != VMK_OK) {
       vmk_Warning(pimon_logger,
                   "unable to copy ioctl data from UW ptr %p: %s",
@@ -496,7 +504,7 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
     * Call CB
     */
    vmk_SpinlockLock(fileData->lock);
-   status = pimon_CharDevCBs->ioctl(cmd, ioctlData, ioctlDataLen);
+   status = privData->callbacks->ioctl(cmd, mboxBuffer);
    vmk_SpinlockUnlock(fileData->lock);
    if (status != VMK_OK) {
       vmk_Warning(pimon_logger,
@@ -511,8 +519,8 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
     * Copy iotl data back to UW
     */
    status = vmk_CopyToUser((vmk_VA)userData,
-                           (vmk_VA)ioctlData,
-                           ioctlDataLen);
+                           (vmk_VA)mboxBuffer,
+                           mboxHeader.bufLen);
    if (status != VMK_OK) {
       vmk_Warning(pimon_logger,
                   "unable to copy ioctl data back to UW: %s",
@@ -520,17 +528,18 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
       goto ioctl_vmk2uw_failed;
    }
 
-   vmk_HeapFree(pimon_heapID, ioctlData);
+   vmk_HeapFree(pimon_heapID, mboxBuffer);
 
    return VMK_OK;
 
 ioctl_vmk2uw_failed:
 ioctl_cmd_failed:
 ioctl_uw2vmk_failed:
-   vmk_HeapFree(pimon_heapID, ioctlData);
+   vmk_HeapFree(pimon_heapID, mboxBuffer);
 
 ioctl_alloc_failed:
 file_data_null:
+mbox_header_invalid:
    return status;
 }
 

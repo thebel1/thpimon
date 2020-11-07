@@ -32,24 +32,29 @@
 
 #include "pimon.h"
 #include "pimon_types.h"
+#include "pimon_charDev.h"
 
 #define RPIQ_DEBUG
 
 /***********************************************************************/
+
+#define RPIQ_MBOX_BUFFER_SIZE       0x1000
 
 #define RPIQ_DMA_HEAP_NAME          "rpiqDmaHeap"
 
 #define RPIQ_DMA_COHERENT_ADDR      0xC0000000
 #define RPIQ_DMA_MAX_ADDR           ((vmk_VA)1<<32)
 #define RPIQ_DMA_MBOX_ALIGNMENT     16
+#define RPIQ_DMA_FBUF_ALIGNMENT     32
 
 /* Maximum mbox objects to allocate on DMA heap */
-#define RPIQ_DMA_MBOX_OBJ_MAX       256
+#define RPIQ_DMA_MBOX_OBJ_MAX       10
 
 #define RPIQ_MBOX_CHAN_MASK         15
+#define RPIQ_MBOX_CHAN_MAX          15
 
 /* Very generous to avoid sporadic timeouts */
-#define RPIQ_MBOX_MAX_RETRIES       0x4000
+#define RPIQ_MBOX_MAX_RETRIES       0x8000
 
 /***********************************************************************/
 
@@ -104,6 +109,13 @@
 
 // TODO: the resto fot he mbox tags...
 
+/* Frame buffer */
+#define RPIQ_MBOX_TAG_SET_FB_PHYS   0x00048003
+#define RPIQ_MBOX_TAG_SET_FB_VIRT   0x00048004
+#define RPIQ_MBOX_TAG_SET_FB_DEPTH  0x00048005
+#define RPIQ_MBOX_TAG_ALLOC_FB      0x00040001
+#define RPIQ_MBOX_TAG_GET_FB_LINE   0x00040008
+
 #define RPIQ_MBOX_TAG_GET_TEMP      0x00030006
 
 #define RPIQ_INVALID_RESPONSE       (~((vmk_uint32)0))
@@ -126,58 +138,6 @@
 
 /***********************************************************************/
 
-typedef struct rpiq_Device_t {
-   /* Object */
-   vmk_Bool initialized;
-   vmk_atomic64 refCount;
-   /* Device */
-   vmk_Device vmkDevice;
-   vmk_ACPIDevice acpiDevice;
-   vmk_ACPIInfo acpiInfo;
-   /* MMIO */
-   vmk_MappedResourceAddress mmioMappedAddr;
-   char *mmioBase;
-   vmk_ByteCount mmioLen;
-   /* DMA */
-   vmk_HeapID dmaHeapID;
-} rpiq_Device_t;
-
-/*
- * Data structures for passing data between UW and RPIQ interface.
- */
-
-typedef struct rpiq_MboxHeader_t {
-   vmk_uint32 bufLen;
-   vmk_uint32 requestResponse;
-   vmk_uint32 tag;
-   vmk_uint32 responseLen;
-   vmk_uint32 requestLen;
-} rpiq_MboxHeader_t;
-
-typedef struct rpiq_MboxBuffer_t {
-   rpiq_MboxHeader_t header;
-   /* Everything below be set to zero! */
-   vmk_uint32 endTag;
-   vmk_uint32 padding[2];
-} rpiq_MboxBuffer_t, rpiq_IoctlData_t;
-
-/*
- * RPIQ mailbox channels which selected using the ioctl cmd.
- */
-typedef enum rpiq_MboxChannel_t {
-   /* Update the min value when adding elements */
-   RPIQ_CHAN_MBOX_MIN            = 8,
-   RPIQ_CHAN_MBOX_PROP_ARM2VC    = 8,
-   RPIQ_CHAN_MBOX_MAX            = RPIQ_CHAN_MBOX_PROP_ARM2VC,
-} rpiq_MboxChannel_t, rpiq_IoctlCommand_t;
-
-typedef struct rpiq_MboxDMABuffer_t {
-   rpiq_MboxBuffer_t *ptr;
-   vmk_Lock lock;
-} rpiq_MboxDMABuffer_t;
-
-/***********************************************************************/
-
 VMK_ReturnStatus rpiq_drvInit(pimon_Driver_t *driver,
                               rpiq_Device_t *adapter);
 
@@ -189,13 +149,20 @@ VMK_ReturnStatus rpiq_mboxRead(rpiq_MboxChannel_t channel,
 VMK_ReturnStatus rpiq_mboxWrite(rpiq_MboxChannel_t channel,
                                 rpiq_MboxBuffer_t *buffer);
 
+VMK_ReturnStatus rpiq_fbufAlloc(unsigned int cmd, 
+                                void *data,
+                                vmk_ByteCount ioctlDataLen);
+
+/*
+ * MMIO callbacks
+ */
+
 VMK_ReturnStatus rpiq_mmioOpenCB(vmk_CharDevFdAttr *attr);
 
 VMK_ReturnStatus rpiq_mmioCloseCB(vmk_CharDevFdAttr *attr);
 
 VMK_ReturnStatus rpiq_mmioIoctlCB(unsigned int cmd,
-                                  void *data,
-                                  vmk_ByteCount ioctlDataLen);
+                                  rpiq_MboxBuffer_t *buffer);
 
 VMK_ReturnStatus rpiq_mmioReadCB(char *buffer,
                                  vmk_ByteCount nbytes,
@@ -206,6 +173,12 @@ VMK_ReturnStatus rpiq_mmioWriteCB(char *buffer,
                                   vmk_ByteCount nbytes,
                                   vmk_loff_t *ppos,
                                   vmk_ByteCountSigned *nwritten);
+
+VMK_ReturnStatus rpiq_mboxRead(rpiq_MboxChannel_t channel,
+                               vmk_uint32 *response);
+
+VMK_ReturnStatus rpiq_mboxWrite(rpiq_MboxChannel_t channel,
+                                rpiq_MboxBuffer_t *buffer);
 
 /***********************************************************************/
 

@@ -39,6 +39,7 @@ RPIQ_PROCESS_REQ            = 0
 # PiMon ioctl commands
 #
 RPIQ_CHAN_MBOX_PROP_ARM2VC  = 8
+RPIQ_CMD_ALLOC_FBUF         = 24
 
 #
 # RPIQ tags
@@ -64,6 +65,9 @@ RPIQ_MBOX_GET_TEMP_LEN      = 0x8
 
 RPIQ_MBOX_TAG_ARMMEM        = 0x00010005
 RPIQ_MBOX_ARMMEM_LEN        = 0x8
+
+RPIQ_MBOX_TAG_ALLOC_FBUF    = 0x00040001
+RPIQ_MBOX_ALLOC_FBUF_LEN    = 0x8
 
 #########################################################################
 # PiMon --
@@ -222,6 +226,28 @@ class PiMon:
                         ioctlData, 1)
             print(struct.unpack('<IIIIIIII', ioctlData))
             out = int(struct.unpack('<IIIIIIII', ioctlData)[6]) / 1024 / 1024
+        except Exception as e:
+            print(e)
+            return 0
+        return out
+
+    #########################################################################
+    # getScreenshot --
+    #
+    #########################################################################
+    def getScreenshot(self):
+        try:
+            ioctlData = bytearray(struct.pack('<IIIIIIII',
+                                              RPIQ_BUFFER_LEN,
+                                              RPIQ_PROCESS_REQ,
+                                              RPIQ_MBOX_TAG_ALLOC_FBUF,
+                                              RPIQ_MBOX_ALLOC_FBUF_LEN,
+                                              32, 0, 0, 0))
+            fcntl.ioctl(self.pimonDev,
+                        RPIQ_CMD_ALLOC_FBUF,
+                        ioctlData, 1)
+            print(struct.unpack('<IIIIIIII', ioctlData))
+            out = int(struct.unpack('<IIIIIIII', ioctlData)[6]) / 1000
         except Exception as e:
             print(e)
             return 0
