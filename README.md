@@ -14,3 +14,5 @@ Install it as described here: https://kb.vmware.com/s/article/2008939
 Note: you will need to reboot the RPi after installing the VIB.
 
 I would recommend downloading the Python library in ./pyUtil/pimonLib/ to interact with the thpimon character device.
+
+Note: You may need to manually change the `PIMON_DEVICE_PATH` variable in `./pyUtil/gpioLib/__init__.py` to reflect the correct name for the character device. This is due to a limitation in the current version of the VMKernel API.
