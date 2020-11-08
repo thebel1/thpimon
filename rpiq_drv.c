@@ -394,12 +394,14 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    VMK_ReturnStatus status = VMK_OK;
    vmk_MapRequest mapReq;
    vmk_uint32 buffer[9];
-   vmk_uint32 width, height;
+   vmk_uint32 width, height, pitch, bpp;
    vmk_MA fbufMA;
    vmk_uint32 fbufLen;
    vmk_MPN firstMPN;
    vmk_MpnRange mpnRange;
    vmk_VA fbufVA;
+
+   // TODO: try to get the mbox commands into one transation.
 
    /*
     * Get dimensions
@@ -422,6 +424,44 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    height = buffer[6];
 
    /*
+    * Get pitch
+    */
+
+   buffer[0] = 4 * 8;
+   buffer[1] = RPIQ_PROCESS_REQ;
+   buffer[2] = RPIQ_MBOX_TAG_GET_PITCH;
+   buffer[3] = 1 * sizeof(vmk_uint32);
+   buffer[4] = 0;
+   buffer[5] = 0;
+   buffer[6] = 0;
+   buffer[7] = 0;
+   buffer[8] = 0;
+
+   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                          (rpiq_MboxBuffer_t *)&buffer);
+
+   pitch = buffer[5];
+
+   /*
+    * Set bits per pixel
+    */
+
+   buffer[0] = 4 * 8;
+   buffer[1] = RPIQ_PROCESS_REQ;
+   buffer[2] = RPIQ_MBOX_TAG_GET_FB_DEPTH;
+   buffer[3] = 1 * sizeof(vmk_uint32);
+   buffer[4] = 0;
+   buffer[5] = 0;
+   buffer[6] = 0;
+   buffer[7] = 0;
+   buffer[8] = 0;
+
+   status |= rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                           (rpiq_MboxBuffer_t *)&buffer);
+
+   bpp = buffer[5];
+
+   /*
     * Get frame buffer
     */
 
@@ -435,14 +475,20 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    buffer[7] = 0;
    buffer[8] = 0;
 
-   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          (rpiq_MboxBuffer_t *)&buffer);
+   status |= rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                           (rpiq_MboxBuffer_t *)&buffer);
 
    fbufMA = buffer[5] ^ RPIQ_DMA_COHERENT_ADDR;
    fbufLen = buffer[6];
 
+   if (status != VMK_OK) {
+      status = VMK_FAILURE;
+      vmk_Warning(pimon_Driver->logger, "VC mailbox transaction(s) failed");
+      goto mbox_txn_failed;
+   }
+
    /*
-    * Map the returned frame buffer, copy it, then unmap it
+    * Map the returned frame buffer
     */
 
    firstMPN = vmk_MA2MPN(fbufMA);
@@ -450,6 +496,10 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    vmk_Memset(&mpnRange, 0, sizeof(mpnRange));
    mpnRange.startMPN = firstMPN;
    mpnRange.numPages = VMK_UTIL_ROUNDUP(fbufLen, VMK_PAGE_SIZE) / VMK_PAGE_SIZE;
+
+   RPIQ_DEBUG_LOG(pimon_Driver->logger,
+                  "mapping MA %p: firstMPN %p, %d MPNs",
+                  fbufMA, firstMPN, mpnRange.numPages);
 
    vmk_Memset(&mapReq, 0, sizeof(mapReq));
    mapReq.mapType = VMK_MAPTYPE_DEFAULT;
@@ -459,10 +509,26 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    mapReq.reservation = NULL;
 
    status = vmk_Map(pimon_Driver->moduleID, &mapReq, &fbufVA);
+   if (status != VMK_OK) {
+      vmk_Warning(pimon_Driver->logger,
+                  "failed to map frame buffer: %s",
+                  vmk_StatusToString(status));
+      goto fbuf_map_failed;
+   }
+
+   /*
+    * Copy the frame buffer
+    */
 
    fbuf->width = width;
    fbuf->height = height;
+   fbuf->pitch = pitch;
+   fbuf->bpp = bpp;
    fbuf->rawLen = fbufLen;
+
+   RPIQ_DEBUG_LOG(pimon_Driver->logger,
+                  "allocating frame buffer of len %d",
+                  fbuf->rawLen);
    
    fbuf->raw = vmk_HeapAlloc(pimon_Driver->heapID,
                              fbuf->rawLen);
@@ -474,15 +540,25 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
       goto fbuf_alloc_failed;
    }
 
+   RPIQ_DEBUG_LOG(pimon_Driver->logger,
+                  "copying frame buffer from %p (len %p) to range %p - %p",
+                  fbufVA, fbuf->rawLen, fbuf->raw,
+                  (char *)fbuf->raw + fbuf->rawLen);
+
    vmk_Memcpy((void *)fbuf->raw,
                (void *)fbufVA,
                fbuf->rawLen);
 
+   /*
+    * Unmap the frame buffer
+    */
    vmk_Unmap(fbufVA);
 
    return VMK_OK;
 
 fbuf_alloc_failed:
+fbuf_map_failed:
+mbox_txn_failed:
    return status;
 }
 
@@ -520,11 +596,11 @@ rpiq_fbufFree(rpiq_FrameBuffer_t *fbuf)
  */
 VMK_ReturnStatus
 rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
-                  rpiq_Bitmap_t *bitmap)     // OUT
+                  rpiq_Bitmap_t *bitmap)     // IN/OUT
 {
    VMK_ReturnStatus status = VMK_OK;
    rpiq_BitmapHeader_t *bitmapHeader;
-   rpiq_FrameBufferPixel_t *fbufPixel;
+   rpiq_FrameBufferPixel_t *fbufBase, *fbufPixel;
    vmk_ByteCount paddingLen, bitmapLen;
    char *image;
    int row, col;
@@ -539,14 +615,30 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
    }
 
    /*
-    * Allocate bitmap
+    * Determine bitmap len
     */
-
    paddingLen = fbuf->width & 3;
    bitmapLen = (((fbuf->width * 3) + paddingLen) * fbuf->height)
-               + sizeof(bitmapHeader);
+               + sizeof(*bitmapHeader);
 
-   bitmap->bitmapLen = bitmapLen;
+   /*
+    * Ensure enough space was allocated for the bitmap
+    */
+   if (bitmap->bitmapLen >= bitmapLen) {
+      bitmap->bitmapLen = bitmapLen;
+   }
+   else {
+      status = VMK_NO_MEMORY;
+      vmk_Warning(pimon_Driver->logger,
+                  "bitmap buffer overflow; data size %d, alloc size %d",
+                  bitmapLen, bitmap->bitmapLen);
+      goto bitmap_buf_overflow;
+   }
+
+   RPIQ_DEBUG_LOG(pimon_Driver->logger,
+                  "bitmap buffer len %d; frame buffer len %d",
+                  bitmapLen,
+                  fbuf->rawLen);
 
    /*
     * Set bitmap header
@@ -558,13 +650,14 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
    bitmapHeader->len             = bitmapLen;
    bitmapHeader->reserved[0]     = 0;
    bitmapHeader->reserved[1]     = 0;
-   bitmapHeader->imageOffset     = sizeof(bitmapHeader);
-   bitmapHeader->headerLen       = PIMON_OFFSET_OF(typeof(*bitmapHeader),
-                                                   headerLen);
+   bitmapHeader->imageOffset     = sizeof(*bitmapHeader);
+   bitmapHeader->headerLen       = sizeof(*bitmapHeader)
+                                   - PIMON_OFFSET_OF(typeof(*bitmapHeader),
+                                                     headerLen);
    bitmapHeader->width           = fbuf->width;
    bitmapHeader->height          = fbuf->height;
    bitmapHeader->planes          = 1;
-   bitmapHeader->bitsPerPixel    = RPIQ_BITS_PER_PIXEL;
+   bitmapHeader->bitsPerPixel    = 24;
    bitmapHeader->compressionType = 1;
    bitmapHeader->imageLen        = bitmapLen - sizeof(*bitmapHeader);
    bitmapHeader->xPixelsPerMeter = 0;
@@ -577,20 +670,26 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
     */
 
    image = (char *)bitmapHeader + sizeof(*bitmapHeader);
+   fbufBase = (rpiq_FrameBufferPixel_t *)&fbuf->raw;
    for (row = 0; row < fbuf->height; ++row) {
-      fbufPixel = (rpiq_FrameBufferPixel_t *)&fbuf->raw[(fbuf->height - row - 1)
-                                                        * fbuf->width];
+      fbufPixel = &fbufBase[(fbuf->height - row - 1) * fbuf->width];
+
+      RPIQ_DEBUG_LOG(pimon_Driver->logger,
+                     "row %d fbufPixel %p fbufBase %p max %p",
+                     row, fbufPixel, fbufBase,
+                     (char *)fbufBase + (fbuf->height - 1) * fbuf->width);
 
       for (col = 0; col < fbuf->width; ++col) {
-         *(image++) = fbufPixel->blue;
-         *(image++) = fbufPixel->green;
-         *(image++) = fbufPixel->red;
+         *image++ = fbufPixel->blue;
+         *image++ = fbufPixel->green;
+         *image++ = fbufPixel->red;
          ++fbufPixel;
       }
 
       image += paddingLen;
    }
 
+bitmap_buf_overflow:
 fbuf_invalid:
    return status;
 }

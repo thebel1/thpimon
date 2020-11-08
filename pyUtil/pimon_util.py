@@ -4,6 +4,7 @@ import sys
 from pimonLib import *
 
 def main(argv):
+    
     pimon = PiMon()
     boardMACBytes = pimon.getBoardMAC().to_bytes(6, 'little')
     boardMACArr = []

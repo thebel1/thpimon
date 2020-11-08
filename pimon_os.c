@@ -409,13 +409,9 @@ pimon_attachDevice(vmk_Device device)
       goto device_attach_failed;
    }
 
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_Driver.logger,
-              "DMA heap %p",
-              adapter->dmaHeapID);
-   }
-#endif /* PIMON_DEBUG */
+   PIMON_DEBUG_LOG(pimon_Driver.logger,
+                   "DMA heap %p",
+                   adapter->dmaHeapID);
 
    return VMK_OK;
 

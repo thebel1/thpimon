@@ -27,7 +27,7 @@ import fcntl
 
 #########################################################################
 
-PIMON_DEVICE_PATH = '/dev/vmgfx33'
+PIMON_DEVICE_PATH = '/path/to/char/device'
 
 #########################################################################
 
@@ -39,8 +39,8 @@ RPIQ_PROCESS_REQ            = 0
 # Bitmap buffer
 #
 RPIQ_BITMAP_HEADER_LEN      = 54
-RPIQ_SCRN_WIDTH_MAX         = 1920
-RPIQ_SCRN_HEIGHT_MAX        = 1080
+RPIQ_SCRN_WIDTH_MAX         = 2500
+RPIQ_SCRN_HEIGHT_MAX        = 1500
 RPIQ_SCRN_BMP_LEN           = (((RPIQ_SCRN_WIDTH_MAX * 3)                      \
                               + (RPIQ_SCRN_WIDTH_MAX & 3))                     \
                               * RPIQ_SCRN_HEIGHT_MAX)                          \
@@ -251,7 +251,7 @@ class PiMon:
         bmpLenLen = 8
         bufLen = hdrLen + bmpLenLen + RPIQ_SCRN_BMP_LEN
 
-        ioctlData = bytearray(struct.pack('<IQ', bufLen, 0))               \
+        ioctlData = bytearray(struct.pack('<IQ', bufLen, RPIQ_SCRN_BMP_LEN))   \
                     + bytearray(RPIQ_SCRN_BMP_LEN)
         fcntl.ioctl(self.pimonDev,
                     RPIQ_CMD_PRINT_SCRN,

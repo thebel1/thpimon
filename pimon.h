@@ -28,11 +28,16 @@
 #include "vmkapi.h"
 
 #define PIMON_DEBUG
+#ifdef PIMON_DEBUG
+#define PIMON_DEBUG_LOG(_logger, _msg, ...) vmk_Log(_logger, _msg, ##__VA_ARGS__);
+#else
+#define PIMON_DEBUG_LOG(...) (void)0;
+#endif /* PIMON_DEBUG */
 
 #define PIMON_DRIVER_NAME "thpimon"
 
 /* Large size is there to accommodate frame buffer */
-#define PIMON_HEAP_INITIAL_SIZE (10 * 1024 * 1024)
+#define PIMON_HEAP_INITIAL_SIZE (20 * 1024 * 1024)
 #define PIMON_HEAP_MAX_SIZE (50 * 1024 * 1024)
 
 #define PIMON_INT_MAX ((vmk_uint32)~0)

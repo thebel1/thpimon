@@ -240,13 +240,9 @@ pimon_charDevAssoc(vmk_AddrCookie charDevPriv,
       goto get_alias_failed;
    }
 
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_logger,
-              "obtained logical device alias %s",
-              charDevAlias.string);
-   }
-#endif /* PIMON_DEBUG */
+   PIMON_DEBUG_LOG(pimon_logger,
+                   "obtained logical device alias %s",
+                   charDevAlias.string);
 
    return VMK_OK;
 
@@ -349,14 +345,10 @@ pimon_charDevOpen(vmk_CharDevFdAttr *attr)
    fileData->timeoutUS = PIMON_CHARDEV_POLL_TIMEOUT_US;
    attr->clientInstanceData.ptr = fileData;
 
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_logger,
-              "opened file; priv %p lock %p",
-              fileData,
-              fileData->lock);
-   }
-#endif /* PIMON_DEBUG */
+   PIMON_DEBUG_LOG(pimon_logger,
+                   "opened file; priv %p lock %p",
+                   fileData,
+                   fileData->lock);
 
    /* Call CB */
    status = privData->callbacks->open(attr);
@@ -464,14 +456,10 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
       goto ioctl_alloc_failed;
    }
 
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_logger,
-              "copying ioctl data from %p (UW) to %p (vmk)",
-              (vmk_VA)userData,
-              (vmk_VA)ioctlBuffer);
-   }
-#endif /* PIMON_DEBUG */
+   PIMON_DEBUG_LOG(pimon_logger,
+                   "copying ioctl data from %p (UW) to %p (vmk)",
+                   (vmk_VA)userData,
+                   (vmk_VA)ioctlBuffer);
 
    /*
     * Copy ioctl data from UW
@@ -487,14 +475,9 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
       goto ioctl_uw2vmk_failed;
    }
 
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_logger,
-              "executing ioctl cmd %d with data %p",
-              cmd,
-              userData);
-   }
-#endif
+   PIMON_DEBUG_LOG(pimon_logger,
+                   "executing ioctl cmd %d with data %p",
+                   cmd, userData);
 
    /*
     * Call CB
@@ -738,13 +721,9 @@ file_data_null:
 void
 pimon_charDevFileDestroy(pimon_CharFileData_t *fileData)
 {
-#ifdef PIMON_DEBUG
-   {
-      vmk_Log(pimon_logger,
-              "destroying file %p",
-              fileData);
-   }
-#endif /* PIMON_DEBUG */
+   PIMON_DEBUG_LOG(pimon_logger,
+                   "destroying file %p",
+                   fileData);
 
    vmk_SpinlockDestroy(fileData->lock);
    vmk_HeapFree(pimon_heapID, fileData);

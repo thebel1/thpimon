@@ -201,9 +201,12 @@ typedef struct rpiq_FrameBuffer_t {
    vmk_uint32     width;
    vmk_uint32     height;
    vmk_uint32     depth;
+   vmk_uint32     pitch;
+   vmk_uint32     bpp;
    char           *raw;
    vmk_ByteCount  rawLen;
 } rpiq_FrameBuffer_t;
+
 
 typedef struct rpiq_FbufMboxBuffer_t {
    rpiq_MboxHeader_t header;
