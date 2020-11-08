@@ -36,10 +36,21 @@ RPIQ_BUFFER_LEN             = 32
 RPIQ_PROCESS_REQ            = 0
 
 #
+# Bitmap buffer
+#
+RPIQ_BITMAP_HEADER_LEN      = 54
+RPIQ_SCRN_WIDTH_MAX         = 1920
+RPIQ_SCRN_HEIGHT_MAX        = 1080
+RPIQ_SCRN_BMP_LEN           = (((RPIQ_SCRN_WIDTH_MAX * 3)                      \
+                              + (RPIQ_SCRN_WIDTH_MAX & 3))                     \
+                              * RPIQ_SCRN_HEIGHT_MAX)                          \
+                              + RPIQ_BITMAP_HEADER_LEN
+
+#
 # PiMon ioctl commands
 #
 RPIQ_CHAN_MBOX_PROP_ARM2VC  = 8
-RPIQ_CMD_ALLOC_FBUF         = 24
+RPIQ_CMD_PRINT_SCRN         = 24
 
 #
 # RPIQ tags
@@ -235,17 +246,15 @@ class PiMon:
     # getScreenshot --
     #
     #########################################################################
-    def getScreenshot(self):
-        try:
-            bufLen = 24
-            ioctlData = bytearray(struct.pack('<IIIII', bufLen,
-                                              800, 600, 32, 0))
-            fcntl.ioctl(self.pimonDev,
-                        RPIQ_CMD_ALLOC_FBUF,
-                        ioctlData, 1)
-            print(struct.unpack('<IIIII', ioctlData))
-            out = 0
-        except Exception as e:
-            print(e)
-            return 0
-        return out
+    def saveScreenshot(self, path):
+        hdrLen = 4
+        bmpLenLen = 8
+        bufLen = hdrLen + bmpLenLen + RPIQ_SCRN_BMP_LEN
+
+        ioctlData = bytearray(struct.pack('<IQ', bufLen, 0))               \
+                    + bytearray(RPIQ_SCRN_BMP_LEN)
+        fcntl.ioctl(self.pimonDev,
+                    RPIQ_CMD_PRINT_SCRN,
+                    ioctlData, 1)
+        bmpFile = open(path, 'wb')
+        bmpFile.write(ioctlData[hdrLen + bmpLenLen:])

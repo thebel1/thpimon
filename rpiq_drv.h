@@ -54,7 +54,13 @@
 #define RPIQ_MBOX_CHAN_MAX          15
 
 /* Very generous to avoid sporadic timeouts */
+
 #define RPIQ_MBOX_MAX_RETRIES       0x8000
+
+/***********************************************************************/
+
+#define RPIQ_BYTES_PER_PIXEL        (RPIQ_BITS_PER_PIXEL / 8)
+#define RPIQ_BITS_PER_PIXEL         32
 
 /***********************************************************************/
 
@@ -125,9 +131,10 @@
 
 /***********************************************************************/
 
-#define RPIQ_DMA_LOCK_NAME          "dmaBufLock"
+#define RPIQ_DMA_LOCK_NAME "dmaBufLock"
 
-#define RPIQ_DMA_MEM_BARRIER()      asm volatile ("dsb sy" ::: "memory")
+#define RPIQ_DMA_MEM_BARRIER()                                                 \
+   asm volatile ("dsb sy" ::: "memory")
 
 /*
  * Should be sufficient as per p. 33 in:
@@ -149,7 +156,10 @@ void rpiq_drvCleanUp();
 VMK_ReturnStatus rpiq_mboxSend(rpiq_MboxChannel_t channel,
                                rpiq_MboxBuffer_t *buffer);
 
-VMK_ReturnStatus rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData);
+VMK_ReturnStatus rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf);
+
+VMK_ReturnStatus rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,
+                                   rpiq_Bitmap_t *bitmap);
 
 /*
  * MMIO callbacks

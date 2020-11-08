@@ -46,4 +46,6 @@
 #define PIMON_LOG_FUNC      7
 #define PIMON_LOG_TRACEIO   8
 
+#define PIMON_OFFSET_OF(_type, _member) ((vmk_uint64)&(((_type *)0)->_member))
+
 #endif /* PIMON_H */

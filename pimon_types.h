@@ -103,6 +103,9 @@ typedef struct pimon_CharDevProps_t {
 
 /***********************************************************************/
 
+/*
+ * The RPIQ adapter
+ */
 typedef struct rpiq_Device_t {
    /* Object */
    vmk_Bool initialized;
@@ -119,11 +122,24 @@ typedef struct rpiq_Device_t {
    vmk_HeapID dmaHeapID;
 } rpiq_Device_t;
 
+
 /*
- * Data structures for passing data between UW and RPIQ interface.
+ * RPIQ mailbox commands. If <16, then it's the VC channel number, if >=16, it's
+ * a custom command.
  */
+typedef enum rpiq_MboxChannel_t {
+   /* Update the min and max values when adding elements */
+   RPIQ_IOCTL_CMD_MIN            = 8,
+   RPIQ_CHAN_MBOX_PROP_ARM2VC    = 8,
+   RPIQ_CMD_PRINT_SCRN           = 24,
+   RPIQ_IOCTL_CMD_MAX            = RPIQ_CMD_PRINT_SCRN,
+} rpiq_MboxChannel_t, rpiq_IoctlCommand_t;
 
 #pragma pack(push, 1)
+
+/*
+ * VideoCore mailbox types
+ */
 
 typedef struct rpiq_MboxHeader_t {
    vmk_uint32 bufLen;
@@ -139,30 +155,55 @@ typedef struct rpiq_MboxBuffer_t {
    vmk_uint32 padding[2];
 } rpiq_MboxBuffer_t, rpiq_IoctlData_t;
 
-/*
- * RPIQ mailbox commands. If <16, then it's the VC channel number, if >=16, it's
- * a custom command.
- */
-typedef enum rpiq_MboxChannel_t {
-   /* Update the min value when adding elements */
-   RPIQ_IOCTL_CMD_MIN            = 8,
-   RPIQ_CHAN_MBOX_PROP_ARM2VC    = 8,
-   RPIQ_CMD_ALLOC_FBUF           = 24,
-   RPIQ_IOCTL_CMD_MAX            = RPIQ_CMD_ALLOC_FBUF,
-} rpiq_MboxChannel_t, rpiq_IoctlCommand_t;
-
 typedef struct rpiq_MboxDMABuffer_t {
    rpiq_MboxBuffer_t *ptr;
    vmk_Lock lock;
 } rpiq_MboxDMABuffer_t;
 
-typedef struct rpiq_FbufIoctlData_t {
+/*
+ * Bitmap types
+ */
+
+typedef struct rpiq_BitmapHeader_t {
+   char        charB;
+   char        charM;
+   vmk_uint32  len;
+   vmk_uint16  reserved[2];
+   vmk_uint32  imageOffset;
+   vmk_uint32  headerLen;
+   vmk_uint32  width;
+   vmk_uint32  height;
+   vmk_uint16  planes;
+   vmk_uint16  bitsPerPixel;
+   vmk_uint32  compressionType;
+   vmk_uint32  imageLen;
+   vmk_uint32  xPixelsPerMeter;
+   vmk_uint32  yPixelsPerMeter;
+   vmk_uint32  numColors;
+   vmk_uint32  importantColors;
+} rpiq_BitmapHeader_t;
+
+typedef struct rpiq_Bitmap_t {
+   vmk_ByteCount bitmapLen;
+   char bitmap[1];
+} rpiq_Bitmap_t;
+
+/*
+ * Frame buffer types
+ */
+
+typedef struct rpiq_ScreenshotIoctlData_t {
    pimon_IoctlHeader_t  header;
-   vmk_uint32           width;
-   vmk_uint32           height;
-   vmk_uint32           depth;
-   void                 *bitmap;
-} rpiq_FbufIoctlData_t;
+   rpiq_Bitmap_t        bitmap;
+} rpiq_ScreenshotIoctlData_t;
+
+typedef struct rpiq_FrameBuffer_t {
+   vmk_uint32     width;
+   vmk_uint32     height;
+   vmk_uint32     depth;
+   char           *raw;
+   vmk_ByteCount  rawLen;
+} rpiq_FrameBuffer_t;
 
 typedef struct rpiq_FbufMboxBuffer_t {
    rpiq_MboxHeader_t header;
@@ -192,11 +233,14 @@ typedef struct rpiq_FbufMboxBuffer_t {
    vmk_uint32 endTag;
 } rpiq_FbufMboxBuffer_t;
 
+typedef struct rpiq_FrameBufferPixel_t {
+   vmk_uint8   blue;
+   vmk_uint8   green;
+   vmk_uint8   red;
+   vmk_uint8   reserved;
+} rpiq_FrameBufferPixel_t;
+
 #pragma pack(pop)
-
-typedef struct rpiq_FrameBuffer_t {
-
-} rpiq_FrameBuffer_t;
 
 /***********************************************************************/
 

@@ -38,7 +38,7 @@
 
 /***********************************************************************/
 
-#define PIMON_CHARDEV_BUFFER_SIZE       4096 /* Probably overkill */
+#define PIMON_CHARDEV_IOCTL_BUFFER_LEN  (~(vmk_uint32)0)
 #define PIMON_CHARDEV_POLL_TIMEOUT_US   1000000
 
 /***********************************************************************/

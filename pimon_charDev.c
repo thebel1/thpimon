@@ -21,6 +21,10 @@
  * SOFTWARE.
 \******************************************************************************/
 
+// TODO:
+// - Investigate this:
+//   pimon_charDevIoctl:467: failed to allocate memory for ioctl data: Out of memory
+
 /*
  * pimon_charDev.c --
  * 
@@ -442,19 +446,11 @@ pimon_charDevIoctl(vmk_CharDevFdAttr *attr,
    }
 
    /*
-    * Sanity check for VC mbox buffer size
+    * Cope ioctl header to get buffer size
     */
    vmk_CopyFromUser((vmk_VA)&ioctlHeader,
                     (vmk_VA)userData,
                     sizeof(ioctlHeader));
-   if (ioctlHeader.bufLen < 0
-       || ioctlHeader.bufLen > RPIQ_MBOX_BUFFER_SIZE) {
-      status = VMK_BAD_PARAM;
-      vmk_Warning(pimon_logger,
-                  "invalid ioctl buffer size: %d",
-                  ioctlHeader.bufLen);
-      goto mbox_header_invalid;
-   }
 
    /*
     * Allocate ioctl buffer
@@ -539,7 +535,6 @@ ioctl_uw2vmk_failed:
 
 ioctl_alloc_failed:
 file_data_null:
-mbox_header_invalid:
    return status;
 }
 

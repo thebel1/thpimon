@@ -379,7 +379,7 @@ buf_too_large:
  ***********************************************************************
  * rpiq_fbufAlloc --
  * 
- *    Allocate a framebuffer.
+ *    Allocate the framebuffer and copy it.
  * 
  * Results:
  *    VMK_OK   on success, error code otherwise
@@ -389,7 +389,7 @@ buf_too_large:
  ***********************************************************************
  */
 VMK_ReturnStatus
-rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
+rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
 {
    VMK_ReturnStatus status = VMK_OK;
    vmk_MapRequest mapReq;
@@ -397,10 +397,13 @@ rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
    vmk_uint32 width, height;
    vmk_MA fbufMA;
    vmk_uint32 fbufLen;
-   vmk_MPN firstMPN, lastMPN;
+   vmk_MPN firstMPN;
    vmk_MpnRange mpnRange;
    vmk_VA fbufVA;
-   rpiq_FrameBuffer_t *fbuf;
+
+   /*
+    * Get dimensions
+    */
 
    buffer[0] = 4 * 8;
    buffer[1] = RPIQ_PROCESS_REQ;
@@ -418,109 +421,9 @@ rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
    width = buffer[5];
    height = buffer[6];
 
-   vmk_Log(pimon_Driver->logger,
-           "buf[0]=%d buf[1]=%d buf[2]=%d buf[3]=%d buf[4]=%d buf[5]=%d"
-           " buf[6]=%d buf[7]=%d buf[8]=%d",
-           buffer[0],
-           buffer[1],
-           buffer[2],
-           buffer[3],
-           buffer[4],
-           buffer[5],
-           buffer[6],
-           buffer[7],
-           buffer[8]);
-
-   /*mboxCmd.header.bufLen            = sizeof(mboxCmd);
-   mboxCmd.header.requestResponse   = RPIQ_PROCESS_REQ;
-   mboxCmd.physSizeTag              = RPIQ_MBOX_TAG_SET_FB_PHYS;
-   mboxCmd.physSizeTagSize          = 2 * sizeof(vmk_uint32);
-   mboxCmd.physSizeTagValueSize     = 0;
-   mboxCmd.physSizeWidth            = width;
-   mboxCmd.physSizeHeight           = height;
-   mboxCmd.virtSizeTag              = RPIQ_MBOX_TAG_SET_FB_VIRT;
-   mboxCmd.virtSizeTagSize          = 2 * sizeof(vmk_uint32);
-   mboxCmd.virtSizeTagvalueSize     = 0;
-   mboxCmd.virtSizeWidth            = width;
-   mboxCmd.virtSizeHeight           = height;
-   mboxCmd.depthTag                 = RPIQ_MBOX_TAG_SET_FB_DEPTH;
-   mboxCmd.depthTagSize             = sizeof(vmk_uint32);
-   mboxCmd.depthTagValueSize        = 0;
-   mboxCmd.depth                    = 32;
-   mboxCmd.allocFbufTag             = RPIQ_MBOX_TAG_ALLOC_FB;
-   mboxCmd.allocFbufTagSize         = 2 * sizeof(vmk_uint32);
-   mboxCmd.allocFbufTagValueSize    = 0;
-   mboxCmd.allocFbufAlignBase       = 0;
-   mboxCmd.allocFbufSize            = 0;
-   mboxCmd.pitchTag                 = RPIQ_MBOX_TAG_GET_PITCH;
-   mboxCmd.pitchTagSize             = sizeof(vmk_uint32);
-   mboxCmd.pitchTagValueSize        = 0;
-   mboxCmd.endTag                   = 0;
-
-   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          (rpiq_MboxBuffer_t *)&mboxCmd);*/
-
-/*#ifdef RPIQ_DEBUG
-   vmk_Log(pimon_Driver->logger,
-           "\nmboxCmd.header.bufLen=%d"
-           "\nmboxCmd.header.requestResponse=0x%x"
-           "\nmboxCmd.physSizeTag=0x%x"
-           "\nmboxCmd.physSizeTagSize=%d"
-           "\nmboxCmd.physSizeTagValueSize=%d",
-           mboxCmd.header.bufLen,
-           mboxCmd.header.requestResponse,
-           mboxCmd.physSizeTag,
-           mboxCmd.physSizeTagSize,
-           mboxCmd.physSizeTagValueSize);
-   
-   vmk_Log(pimon_Driver->logger,
-           "\nmboxCmd.physSizeWidth=%d"
-           "\nmboxCmd.physSizeHeight=%d"
-           "\nmboxCmd.virtSizeTag=0x%x"
-           "\nmboxCmd.virtSizeTagSize=%d"
-           "\nmboxCmd.virtSizeTagvalueSize=%d",
-           mboxCmd.physSizeWidth,
-           mboxCmd.physSizeHeight,
-           mboxCmd.virtSizeTag,
-           mboxCmd.virtSizeTagSize,
-           mboxCmd.virtSizeTagvalueSize);
-
-   vmk_Log(pimon_Driver->logger,
-           "\nmboxCmd.virtSizeWidth=%d"
-           "\nmboxCmd.virtSizeHeight=%d"
-           "\nmboxCmd.depthTag=0x%x"
-           "\nmboxCmd.depthTagSize=%d"
-           "\nmboxCmd.depthTagValueSize=%d",
-           mboxCmd.virtSizeWidth,
-           mboxCmd.virtSizeHeight,
-           mboxCmd.depthTag,
-           mboxCmd.depthTagSize,
-           mboxCmd.depthTagValueSize);
-
-   vmk_Log(pimon_Driver->logger,
-           "\nmboxCmd.depth=%d"
-           "\nmboxCmd.allocFbufTag=0x%x"
-           "\nmboxCmd.allocFbufTagSize=%d"
-           "\nmboxCmd.allocFbufTagValueSize=%d"
-           "\nmboxCmd.allocFbufAlignBase=%d",
-           mboxCmd.depth,
-           mboxCmd.allocFbufTag,
-           mboxCmd.allocFbufTagSize,
-           mboxCmd.allocFbufTagValueSize,
-           mboxCmd.allocFbufAlignBase);
-
-   vmk_Log(pimon_Driver->logger,
-           "\nmboxCmd.allocFbufSize=%d"
-           "\nmboxCmd.pitchTag=0x%x"
-           "\nmboxCmd.pitchTagSize=%d"
-           "\nmboxCmd.pitchTagValueSize=%d"
-           "\nmboxCmd.endTag=%d",
-           mboxCmd.allocFbufSize,
-           mboxCmd.pitchTag,
-           mboxCmd.pitchTagSize,
-           mboxCmd.pitchTagValueSize,
-           mboxCmd.endTag);
-#endif*/ /* RPIQ_DEBUG */
+   /*
+    * Get frame buffer
+    */
 
    buffer[0] = 4 * 8;
    buffer[1] = RPIQ_PROCESS_REQ;
@@ -535,18 +438,18 @@ rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
    status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
                           (rpiq_MboxBuffer_t *)&buffer);
 
+   fbufMA = buffer[5] ^ RPIQ_DMA_COHERENT_ADDR;
+   fbufLen = buffer[6];
+
    /*
     * Map the returned frame buffer, copy it, then unmap it
     */
 
-   fbufMA = buffer[5] ^ RPIQ_DMA_COHERENT_ADDR;
-   fbufLen = buffer[6];
    firstMPN = vmk_MA2MPN(fbufMA);
-   lastMPN = vmk_MA2MPN(fbufMA + fbufLen - 1);
 
    vmk_Memset(&mpnRange, 0, sizeof(mpnRange));
    mpnRange.startMPN = firstMPN;
-   mpnRange.numPages = lastMPN - firstMPN;
+   mpnRange.numPages = VMK_UTIL_ROUNDUP(fbufLen, VMK_PAGE_SIZE) / VMK_PAGE_SIZE;
 
    vmk_Memset(&mapReq, 0, sizeof(mapReq));
    mapReq.mapType = VMK_MAPTYPE_DEFAULT;
@@ -557,78 +460,138 @@ rpiq_fbufAlloc(rpiq_FbufIoctlData_t *ioctlData) // IN/OUT
 
    status = vmk_Map(pimon_Driver->moduleID, &mapReq, &fbufVA);
 
-   fbuf = vmk_HeapAlloc(pimon_Driver->heapID, fbufLen);
-   if (fbuf == NULL) {
+   fbuf->width = width;
+   fbuf->height = height;
+   fbuf->rawLen = fbufLen;
+   
+   fbuf->raw = vmk_HeapAlloc(pimon_Driver->heapID,
+                             fbuf->rawLen);
+   if (fbuf->raw == NULL) {
       status = VMK_NO_MEMORY;
       vmk_Warning(pimon_Driver->logger,
                   "unable to allocate frame buffer: %s",
                   vmk_StatusToString(status));
       goto fbuf_alloc_failed;
    }
-   vmk_Memcpy((void *)fbuf, (void *)fbufVA, fbufLen);
 
-   //vmk_Unmap(fbufVA);
+   vmk_Memcpy((void *)fbuf->raw,
+               (void *)fbufVA,
+               fbuf->rawLen);
 
-   vmk_Log(pimon_Driver->logger,
-           "buf[0]=%d buf[1]=%d buf[2]=%d buf[3]=%d buf[4]=%d buf[5]=%d"
-           " buf[6]=%d buf[7]=%d buf[8]=%d",
-           buffer[0],
-           buffer[1],
-           buffer[2],
-           buffer[3],
-           buffer[4],
-           buffer[5],
-           buffer[6],
-           buffer[7],
-           buffer[8]);
-
-   vmk_Log(pimon_Driver->logger,
-           "width %d height %d size %d fbuf MA 0x%x VA %p / %p",
-           width, height, fbufLen, fbufMA, fbufVA, fbuf);
-
-/*
-   vmk_uint32 buffer[8];
-   vmk_Memset(buffer, 0, 32);
-   buffer[0] = sizeof(buffer);
-   buffer[1] = RPIQ_PROCESS_REQ;
-   buffer[2] = RPIQ_MBOX_TAG_ALLOC_FB;
-   buffer[3] = 2 * sizeof(vmk_uint32);
-   buffer[4] = RPIQ_DMA_FBUF_ALIGNMENT;
-   buffer[5] = 0;
-   buffer[6] = 0;
-   buffer[7] = 0;
-   mboxBuf = (rpiq_MboxBuffer_t *)&buffer;
-
-   vmk_Log(pimon_Driver->logger,
-           "bufLen=%d rqRp=0x%x tag=0x%x tagLen=%d align=%d endTag=%d"
-           " padding[0]=%d padding[1]=%d",
-           mboxBuf->header.bufLen,
-           mboxBuf->header.requestResponse,
-           mboxBuf->tag,
-           mboxBuf->tagLen,
-           buffer[5],
-           buffer[6],
-           buffer[7]);
-
-   vmk_Log(pimon_Driver->logger, "sending");
-   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          mboxBuf);
-
-   vmk_Log(pimon_Driver->logger,
-           "bufLen=%d rqRp=0x%x tag=0x%x tagLen=%d align=%d endTag=%d"
-           " padding[0]=%d padding[1]=%d",
-           mboxBuf->header.bufLen,
-           mboxBuf->header.requestResponse,
-           mboxBuf->tag,
-           mboxBuf->tagLen,
-           buffer[5],
-           buffer[6],
-           buffer[7]);
-*/
+   vmk_Unmap(fbufVA);
 
    return VMK_OK;
 
 fbuf_alloc_failed:
+   return status;
+}
+
+/*
+ ***********************************************************************
+ * rpiq_fbufFree --
+ * 
+ *    Free a copied framebuffer.
+ * 
+ * Results:
+ *    None.
+ * 
+ * Side Effects:
+ *    None.
+ ***********************************************************************
+ */
+void
+rpiq_fbufFree(rpiq_FrameBuffer_t *fbuf)
+{
+   vmk_HeapFree(pimon_Driver->heapID, fbuf->raw);
+}
+
+/*
+ ***********************************************************************
+ * rpiq_fbufToBitmap --
+ * 
+ *    Convert a raw frame buffer into a bitmap.
+ * 
+ * Results:
+ *    VMK_OK   on success, error code otherwise
+ * 
+ * Side Effects:
+ *    None.
+ ***********************************************************************
+ */
+VMK_ReturnStatus
+rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
+                  rpiq_Bitmap_t *bitmap)     // OUT
+{
+   VMK_ReturnStatus status = VMK_OK;
+   rpiq_BitmapHeader_t *bitmapHeader;
+   rpiq_FrameBufferPixel_t *fbufPixel;
+   vmk_ByteCount paddingLen, bitmapLen;
+   char *image;
+   int row, col;
+
+   if (fbuf->raw == NULL
+       || fbuf->rawLen == 0
+       || fbuf->width == 0
+       || fbuf->height == 0) {
+      status = VMK_FAILURE;
+      vmk_Warning(pimon_Driver->logger, "invalid frame buffer");
+      goto fbuf_invalid;
+   }
+
+   /*
+    * Allocate bitmap
+    */
+
+   paddingLen = fbuf->width & 3;
+   bitmapLen = (((fbuf->width * 3) + paddingLen) * fbuf->height)
+               + sizeof(bitmapHeader);
+
+   bitmap->bitmapLen = bitmapLen;
+
+   /*
+    * Set bitmap header
+    */
+
+   bitmapHeader                  = (rpiq_BitmapHeader_t *)&bitmap->bitmap;
+   bitmapHeader->charB           = 'B';
+   bitmapHeader->charM           = 'M';
+   bitmapHeader->len             = bitmapLen;
+   bitmapHeader->reserved[0]     = 0;
+   bitmapHeader->reserved[1]     = 0;
+   bitmapHeader->imageOffset     = sizeof(bitmapHeader);
+   bitmapHeader->headerLen       = PIMON_OFFSET_OF(typeof(*bitmapHeader),
+                                                   headerLen);
+   bitmapHeader->width           = fbuf->width;
+   bitmapHeader->height          = fbuf->height;
+   bitmapHeader->planes          = 1;
+   bitmapHeader->bitsPerPixel    = RPIQ_BITS_PER_PIXEL;
+   bitmapHeader->compressionType = 1;
+   bitmapHeader->imageLen        = bitmapLen - sizeof(*bitmapHeader);
+   bitmapHeader->xPixelsPerMeter = 0;
+   bitmapHeader->yPixelsPerMeter = 0;
+   bitmapHeader->numColors       = 0;
+   bitmapHeader->importantColors = 0;
+
+   /*
+    * Perform conversion to bitmap
+    */
+
+   image = (char *)bitmapHeader + sizeof(*bitmapHeader);
+   for (row = 0; row < fbuf->height; ++row) {
+      fbufPixel = (rpiq_FrameBufferPixel_t *)&fbuf->raw[(fbuf->height - row - 1)
+                                                        * fbuf->width];
+
+      for (col = 0; col < fbuf->width; ++col) {
+         *(image++) = fbufPixel->blue;
+         *(image++) = fbufPixel->green;
+         *(image++) = fbufPixel->red;
+         ++fbufPixel;
+      }
+
+      image += paddingLen;
+   }
+
+fbuf_invalid:
    return status;
 }
 
@@ -697,14 +660,14 @@ rpiq_mmioIoctlCB(unsigned int cmd,                 // IN
 {
    VMK_ReturnStatus status = VMK_OK;
    unsigned int channel;
+   rpiq_ScreenshotIoctlData_t *screenshotIoctlData = (rpiq_ScreenshotIoctlData_t *)ioctlData;
+   rpiq_FrameBuffer_t fbuf;
 
    /*
     * Sanity checks
     */
 
-   if (ioctlData == NULL
-       || ioctlData->bufLen < 0
-       || ioctlData->bufLen > RPIQ_MBOX_BUFFER_SIZE) {
+   if (ioctlData == NULL) {
       status = VMK_BAD_PARAM;
       vmk_Warning(pimon_Driver->logger, "invalid ioctl data");
       goto invalid_ioctl_data;
@@ -723,9 +686,15 @@ rpiq_mmioIoctlCB(unsigned int cmd,                 // IN
    
    channel = cmd & RPIQ_MBOX_CHAN_MASK;
    switch (cmd) {
-      case RPIQ_CMD_ALLOC_FBUF:
-         status = rpiq_fbufAlloc((rpiq_FbufIoctlData_t *)ioctlData);
+
+      /* Print screen */
+      case RPIQ_CMD_PRINT_SCRN:
+         rpiq_fbufAlloc(&fbuf);
+         status = rpiq_fbufToBitmap(&fbuf, &screenshotIoctlData->bitmap);
+         rpiq_fbufFree(&fbuf);
          break;
+      
+      /* Generic mbox transaction */
       default:
          status = rpiq_mboxSend(channel, (rpiq_MboxBuffer_t *)ioctlData);
    }
