@@ -164,7 +164,8 @@ VMK_ReturnStatus rpiq_mboxSend(rpiq_MboxChannel_t channel,
 VMK_ReturnStatus rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf);
 
 VMK_ReturnStatus rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,
-                                   rpiq_Bitmap_t *bitmap);
+                                   rpiq_Bitmap_t *bitmap,
+                                   vmk_ByteCount *bitmapLenOut);
 
 /*
  * MMIO callbacks

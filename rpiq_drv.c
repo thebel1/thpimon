@@ -595,8 +595,9 @@ rpiq_fbufFree(rpiq_FrameBuffer_t *fbuf)
  ***********************************************************************
  */
 VMK_ReturnStatus
-rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
-                  rpiq_Bitmap_t *bitmap)     // IN/OUT
+rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,     // IN
+                  rpiq_Bitmap_t *bitmap,        // IN/OUT
+                  vmk_ByteCount *bitmapLenOut)  // OUT
 {
    VMK_ReturnStatus status = VMK_OK;
    rpiq_BitmapHeader_t *bitmapHeader;
@@ -689,6 +690,13 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
       image += paddingLen;
    }
 
+   /*
+    * Return bitmap length
+    */
+   if (bitmapLenOut != NULL) {
+      *bitmapLenOut = bitmapLen;
+   }
+
 bitmap_buf_overflow:
 fbuf_invalid:
    return status;
@@ -761,6 +769,7 @@ rpiq_mmioIoctlCB(unsigned int cmd,                 // IN
    unsigned int channel;
    rpiq_ScreenshotIoctlData_t *screenshotIoctlData = (rpiq_ScreenshotIoctlData_t *)ioctlData;
    rpiq_FrameBuffer_t fbuf;
+   vmk_ByteCount bitmapLen;
 
    /*
     * Sanity checks
@@ -789,7 +798,10 @@ rpiq_mmioIoctlCB(unsigned int cmd,                 // IN
       /* Print screen */
       case RPIQ_CMD_PRINT_SCRN:
          rpiq_fbufAlloc(&fbuf);
-         status = rpiq_fbufToBitmap(&fbuf, &screenshotIoctlData->bitmap);
+         status = rpiq_fbufToBitmap(&fbuf,
+                                    &screenshotIoctlData->bitmap,
+                                    &bitmapLen);
+         screenshotIoctlData->bitmap.bitmapLen = bitmapLen;
          rpiq_fbufFree(&fbuf);
          break;
       

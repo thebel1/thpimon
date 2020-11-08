@@ -11,6 +11,11 @@ To install the driver, download the VIB file in the build directory and copy it 
 
 Install it as described here: https://kb.vmware.com/s/article/2008939
 
-Note: you will need to reboot the RPi after installing the VIB.
-
 I would recommend downloading the Python library in ./pyUtil/pimonLib/ to interact with the thpimon character device.
+
+After the VIB has been installed:
+
+1. Reboot the RPi
+2. Run the setup script located at /path/to/pyUtil/pimonLib/setup.sh
+3. Take a screenshot using: `/path/to/pyUtil/screenshot.py`
+4. SCP `/tmp/screenshot.bmp` to your local machine and open it

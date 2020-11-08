@@ -256,5 +256,7 @@ class PiMon:
         fcntl.ioctl(self.pimonDev,
                     RPIQ_CMD_PRINT_SCRN,
                     ioctlData, 1)
+        bmpLen = int(struct.unpack('<IQ', ioctlData[0:hdrLen + bmpLenLen])[1])
+        bmpBaseOffset = hdrLen + bmpLenLen
         bmpFile = open(path, 'wb')
-        bmpFile.write(ioctlData[hdrLen + bmpLenLen:])
+        bmpFile.write(ioctlData[bmpBaseOffset:bmpBaseOffset + bmpLen])
