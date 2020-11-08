@@ -34,7 +34,7 @@
 #include "pimon_types.h"
 #include "pimon_charDev.h"
 
-#define RPIQ_DEBUG
+//#define RPIQ_DEBUG
 #ifdef RPIQ_DEBUG
 #define RPIQ_DEBUG_LOG(_logger, _msg, ...) vmk_Log(_logger, _msg, ##__VA_ARGS__);
 #else
