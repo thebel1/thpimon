@@ -658,7 +658,7 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
    bitmapHeader->height          = fbuf->height;
    bitmapHeader->planes          = 1;
    bitmapHeader->bitsPerPixel    = 24;
-   bitmapHeader->compressionType = 1;
+   bitmapHeader->compressionType = 0;
    bitmapHeader->imageLen        = bitmapLen - sizeof(*bitmapHeader);
    bitmapHeader->xPixelsPerMeter = 0;
    bitmapHeader->yPixelsPerMeter = 0;
@@ -670,7 +670,7 @@ rpiq_fbufToBitmap(rpiq_FrameBuffer_t *fbuf,  // IN
     */
 
    image = (char *)bitmapHeader + sizeof(*bitmapHeader);
-   fbufBase = (rpiq_FrameBufferPixel_t *)&fbuf->raw;
+   fbufBase = (rpiq_FrameBufferPixel_t *)fbuf->raw;
    for (row = 0; row < fbuf->height; ++row) {
       fbufPixel = &fbufBase[(fbuf->height - row - 1) * fbuf->width];
 
