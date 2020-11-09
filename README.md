@@ -5,6 +5,20 @@ Using the Python library, you can currently get the board revision and temperatu
 
 Currently work-in-progress, the driver is capable of communicating with the VideoCore firmware using fixed-size buffers (so no console).
 
+### Sample Output
+
+Taken from a Raspberry Pi 4B:
+
+```
+$ /scratch/downloads/pyUtil/pimon_util.py
+Firmware Revision:      0x5f440c10
+Board Model:            0
+Board Revision:         0xc03111
+Board MAC Address:      d6:51:4:32:a6:dc
+Board Serial:           0x000000664b0067
+Temp:                   60.0 (deg. C)
+```
+
 ### Installation
 
 To install the driver, download the VIB file in the build directory and copy it to your RPi.
