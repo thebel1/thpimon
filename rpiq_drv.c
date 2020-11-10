@@ -437,8 +437,8 @@ rpiq_fbufAlloc(rpiq_FrameBuffer_t *fbuf) // OUT
    buffer[7] = 0;
    buffer[8] = 0;
 
-   status = rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
-                          (rpiq_MboxBuffer_t *)&buffer);
+   status |= rpiq_mboxSend(RPIQ_CHAN_MBOX_PROP_ARM2VC,
+                           (rpiq_MboxBuffer_t *)&buffer);
 
    pitch = buffer[5];
 
