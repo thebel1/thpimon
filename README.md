@@ -16,6 +16,6 @@ I would recommend downloading the Python library in ./pyUtil/pimonLib/ to intera
 After the VIB has been installed:
 
 1. Reboot the RPi
-2. Run the setup script located at /path/to/pyUtil/pimonLib/setup.sh
+2. Run the setup script located at `/path/to/pyUtil/pimonLib/setup.sh`
 3. Take a screenshot using: `/path/to/pyUtil/screenshot.py`
 4. SCP `/tmp/screenshot.bmp` to your local machine and open it
