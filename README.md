@@ -30,3 +30,9 @@ Note: you will need to reboot the RPi after installing the VIB.
 I would recommend downloading the Python library in ./pyUtil/pimonLib/ to interact with the thpimon character device.
 
 Note: You may need to manually change the `PIMON_DEVICE_PATH` variable in `./pyUtil/gpioLib/__init__.py` to reflect the correct name for the character device. This is due to a limitation in the current version of the VMKernel API.
+
+### Other Branches
+
+If you want to try auto-configuring the name of the `PIMON_DEVICE_PATH`, check out: https://github.com/thebel1/thpimon/tree/autoconf
+
+If you want to take screenshots of your Pi, check out: https://github.com/thebel1/thpimon/tree/fbuf
