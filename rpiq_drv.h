@@ -138,14 +138,14 @@
 
 #define RPIQ_DMA_LOCK_NAME "dmaBufLock"
 
-#define RPIQ_DMA_MEM_BARRIER()                                                 \
+#define RPIQ_MEM_BARRIER()                                                 \
    asm volatile ("dsb sy" ::: "memory")
 
 /*
  * Should be sufficient as per p. 33 in:
  * https://web.wpi.edu/Pubs/ETD/Available/etd-012017-170924/unrestricted/green_archive.pdf
  */
-#define RPIQ_DMA_FLUSH_DCACHE(_va)                                             \
+#define RPIQ_INVAL_DCACHE(_va)                                             \
    asm volatile ("dc ivac, %0" :: "r" (_va))
 
 #define RPIQ_DMA_CLEAN_DCACHE(_va)                                             \
