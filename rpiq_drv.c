@@ -164,7 +164,7 @@ rpiq_mboxDrain()
       if (mboxStatus == RPIQ_MBOX_EMPTY) {
          return VMK_OK;
       }
-      RPIQ_DMA_MEM_BARRIER();
+      RPIQ_MEM_BARRIER();
       vmk_MappedResourceRead32(&rpiq_Device->mmioMappedAddr,
                                RPIQ_MBOX_READ,
                                &mboxVal);
@@ -200,7 +200,7 @@ rpiq_mboxStatusCleared(vmk_uint32 status)
       if ((mboxStatus & status) == 0) {
          return VMK_OK;
       }
-      RPIQ_DMA_MEM_BARRIER();
+      RPIQ_MEM_BARRIER();
    } while (++retries < RPIQ_MBOX_MAX_RETRIES);
 
    return VMK_TIMEOUT;
@@ -272,18 +272,18 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
              | RPIQ_DMA_COHERENT_ADDR
              | (vmk_uint32)channel);
 
-   RPIQ_DMA_MEM_BARRIER();
+   RPIQ_MEM_BARRIER();
 
    vmk_MappedResourceWrite32(&rpiq_Device->mmioMappedAddr,
                              RPIQ_MBOX_WRITE,
                              mboxIn);
 
-   RPIQ_DMA_MEM_BARRIER();
+   RPIQ_MEM_BARRIER();
 
    /*
     * This needs to be here.
     */
-   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
+   RPIQ_INVAL_DCACHE((void *)dmaBufPtr);
 
    /*
     *-------------------------------------------------------------------
@@ -301,7 +301,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
       goto mbox_full_timeout;
    }
 
-   RPIQ_DMA_MEM_BARRIER();
+   RPIQ_MEM_BARRIER();
 
    /*
     * Perform read
@@ -311,7 +311,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
                                RPIQ_MBOX_READ,
                                &mboxOut);
       
-      RPIQ_DMA_MEM_BARRIER();
+      RPIQ_MEM_BARRIER();
 
       ++mboxReadRetries;
       if (mboxReadRetries >= RPIQ_MBOX_MAX_RETRIES) {
@@ -323,7 +323,7 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
       }
    } while ((mboxOut & RPIQ_MBOX_CHAN_MASK) != channel);
 
-   RPIQ_DMA_MEM_BARRIER();
+   RPIQ_MEM_BARRIER();
 
    /*
     * Something went wrong, in & out buffers don't match
@@ -338,10 +338,10 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel,   // IN
    }
 
    /*
-    * Flush cache and copy data back to in/out buffer
+    * Invalidate cache and copy data back to in/out buffer
     */
 
-   RPIQ_DMA_FLUSH_DCACHE((void *)dmaBufPtr);
+   RPIQ_INVAL_DCACHE((void *)dmaBufPtr);
    vmk_Memcpy(buffer, dmaBufPtr, sizeof(*buffer));
    if (buffer->header.requestResponse != RPIQ_MBOX_SUCCESS) {
       status = VMK_FAILURE;
