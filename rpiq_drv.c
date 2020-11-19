@@ -232,6 +232,11 @@ rpiq_mboxSend(rpiq_MboxChannel_t channel, // IN
    vmk_uint32 mboxOut;
    vmk_uint32 mboxReadRetries = 0;
 
+   // <DEBUG>
+   asm volatile (".word 0" ::: "memory");
+   // </DEBUG>
+
+
    if (buffer->header.bufLen > RPIQ_MBOX_BUFFER_SIZE) {
       status = VMK_NOT_SUPPORTED;
       vmk_Warning(pimon_Driver->logger,
