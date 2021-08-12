@@ -3,6 +3,7 @@
 import sys
 from pimonLib import *
 
+
 def main(argv):
     pimon = PiMon()
     boardMACBytes = pimon.getBoardMAC().to_bytes(6, 'little')
@@ -18,7 +19,8 @@ def main(argv):
     print('Board Revision:\t\t{}'.format(hex(pimon.getBoardRev())))
     print('Board MAC Address:\t{}'.format(boardMACStr))
     print('Board Serial:\t\t{0:#0{1}x}'.format(pimon.getBoardSerial(), 16))
-    print('Temp:\t\t\t{} (deg. C)'.format(pimon.getTemp()))
+    print('Temp:\t\t\t{:.1f} (deg. C)'.format(pimon.getTemp()))
+
 
 if __name__ == '__main__':
     main(sys.argv)
